@@ -107,9 +107,18 @@ class SpeechTranscriber:
         """Create Azure OpenAI client."""
         return AzureOpenAI(
             api_key=self.settings.azure_openai_api_key,
-            api_version="2024-10-21",  # API version that supports gpt-4o-transcribe-diarize
+            api_version=self.settings.azure_openai_api_version,
             azure_endpoint=self.settings.azure_openai_endpoint
         )
+
+    def _get_segment_speaker_label(self, segment) -> str | None:
+        """Best-effort extraction of a diarization speaker label from a segment."""
+        for attr in ["speaker", "speaker_id", "speakerId", "speaker_label", "speakerLabel"]:
+            if hasattr(segment, attr):
+                value = getattr(segment, attr)
+                if value is not None:
+                    return str(value)
+        return None
     
     async def transcribe_file(
         self,
@@ -176,24 +185,26 @@ class SpeechTranscriber:
             
             # Open and send file to Azure OpenAI
             with open(file_to_transcribe, "rb") as audio_file:
-                # Call the transcription API with diarization
-                # The gpt-4o-transcribe-diarize model requires chunking_strategy for diarization
-                response = self.client.audio.transcriptions.create(
-                    model=self.settings.azure_openai_deployment_name,
-                    file=audio_file,
-                    language=language,
-                    response_format="json",  # gpt-4o-transcribe-diarize only supports json or text
-                    extra_body={
-                        "chunking_strategy": {"type": "server_vad"}
+                # Use verbose_json to receive segments (required for timestamps; also where diarization labels may appear).
+                create_kwargs: dict = {
+                    "model": self.settings.azure_openai_deployment_name,
+                    "file": audio_file,
+                    "language": language,
+                    "response_format": "verbose_json",
+                }
+                if self.settings.azure_openai_chunking_strategy_type:
+                    create_kwargs["extra_body"] = {
+                        "chunking_strategy": {"type": self.settings.azure_openai_chunking_strategy_type}
                     }
-                )
+
+                response = self.client.audio.transcriptions.create(**create_kwargs)
             
             if on_progress:
                 on_progress("Processing transcription response...")
             
             # Parse the response
-            result.full_text = response.text
-            result.duration_seconds = getattr(response, 'duration', 0.0)
+            result.full_text = getattr(response, "text", "") or ""
+            result.duration_seconds = float(getattr(response, "duration", 0.0) or 0.0)
             
             # Parse segments with speaker information
             # The diarize model includes speaker labels in the response
@@ -201,16 +212,16 @@ class SpeechTranscriber:
                 for segment in response.segments:
                     # Extract speaker ID from the segment
                     # gpt-4o-transcribe-diarize includes speaker info in segments
-                    speaker_id = getattr(segment, 'speaker', None)
+                    speaker_id = self._get_segment_speaker_label(segment)
                     if speaker_id is None:
                         # Fallback: check for speaker in text or use default
                         speaker_id = self._extract_speaker_from_segment(segment)
                     
                     trans_segment = TranscriptionSegment(
                         speaker_id=speaker_id or "Speaker",
-                        text=segment.text.strip(),
-                        start_time=getattr(segment, 'start', 0.0),
-                        end_time=getattr(segment, 'end', 0.0)
+                        text=(getattr(segment, "text", "") or "").strip(),
+                        start_time=float(getattr(segment, "start", 0.0) or 0.0),
+                        end_time=float(getattr(segment, "end", 0.0) or 0.0)
                     )
                     result.segments.append(trans_segment)
             else:
