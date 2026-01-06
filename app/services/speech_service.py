@@ -295,6 +295,7 @@ class SpeechTranscriber:
                     "file": audio_file,
                     "language": language,
                     "response_format": requested_format,
+                    "temperature": 0,  # Deterministic output for better quality
                 }
                 if effective_chunking:
                     create_kwargs["chunking_strategy"] = effective_chunking
@@ -306,6 +307,7 @@ class SpeechTranscriber:
                         "language": language,
                         "response_format": create_kwargs.get("response_format"),
                         "chunking_strategy": effective_chunking,
+                        "temperature": 0,
                         "chunking_inferred": inferred_chunking is not None and configured_chunking is None,
                     },
                 )
