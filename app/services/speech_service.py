@@ -107,7 +107,7 @@ class SpeechTranscriber:
         """Create Azure OpenAI client."""
         return AzureOpenAI(
             api_key=self.settings.azure_openai_api_key,
-            api_version="2025-01-01",  # Use latest API version for transcribe-diarize
+            api_version="2024-10-21",  # API version that supports gpt-4o-transcribe-diarize
             azure_endpoint=self.settings.azure_openai_endpoint
         )
     
@@ -177,13 +177,15 @@ class SpeechTranscriber:
             # Open and send file to Azure OpenAI
             with open(file_to_transcribe, "rb") as audio_file:
                 # Call the transcription API with diarization
-                # The gpt-4o-transcribe-diarize model returns speaker labels
+                # The gpt-4o-transcribe-diarize model requires chunking_strategy for diarization
                 response = self.client.audio.transcriptions.create(
                     model=self.settings.azure_openai_deployment_name,
                     file=audio_file,
                     language=language,
-                    response_format="verbose_json",  # Get detailed response with timestamps
-                    timestamp_granularities=["word", "segment"]
+                    response_format="json",  # gpt-4o-transcribe-diarize only supports json or text
+                    extra_body={
+                        "chunking_strategy": {"type": "server_vad"}
+                    }
                 )
             
             if on_progress:

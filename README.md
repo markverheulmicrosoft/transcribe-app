@@ -105,7 +105,23 @@ brew install ffmpeg
 - Docker en Docker Compose (voor container deployment)
 - Azure OpenAI Service met gpt-4o-transcribe-diarize deployment (via Azure Foundry)
 
-### Stap 1: Clone en configureer
+### Stap 1: Deploy het gpt-4o-transcribe-diarize model in Azure
+
+**⚠️ BELANGRIJK**: Je moet eerst het model deployen in Azure AI Foundry voordat je de applicatie kunt gebruiken.
+
+1. Ga naar [Azure AI Foundry Portal](https://ai.azure.com)
+2. Selecteer je Azure OpenAI resource of maak een nieuwe aan
+3. Ga naar **Deployments** → **Create new deployment**
+4. Selecteer model: **gpt-4o-transcribe-diarize** (versie 2025-10-15)
+5. Kies een deployment naam (bijv. `gpt-4o-transcribe-diarize`)
+6. Selecteer **Global Standard** als deployment type
+7. Klik op **Create**
+
+**Beschikbare regio's voor gpt-4o-transcribe-diarize:**
+- East US 2 (Global Standard)
+- Sweden Central (Global Standard)
+
+### Stap 2: Clone en configureer
 
 ```bash
 # Clone repository
@@ -118,15 +134,22 @@ cp .env.example .env
 nano .env
 ```
 
-### Stap 2: Vul de .env in
+### Stap 3: Vul de .env in
 
 ```env
+# Azure OpenAI endpoint - vind dit in Azure Portal onder "Keys and Endpoint"
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+
+# API key - vind dit in Azure Portal onder "Keys and Endpoint"  
 AZURE_OPENAI_API_KEY=your-api-key-here
+
+# Deployment naam - dit is de naam die je koos in stap 1.5
 AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o-transcribe-diarize
 ```
 
-### Stap 3: Lokale Development (met UV)
+**Let op**: De deployment naam is NIET hetzelfde als de model naam. Het is de naam die je zelf hebt gekozen bij het aanmaken van de deployment.
+
+### Stap 4: Lokale Development (met UV)
 
 ```bash
 # Installeer UV (indien nog niet geïnstalleerd)
@@ -149,7 +172,7 @@ make lint
 make format
 ```
 
-### Stap 3b: Docker Deployment
+### Stap 4b: Docker Deployment
 
 ```bash
 # Build en start met Docker Compose
@@ -161,7 +184,7 @@ make docker-stop
 # of: docker-compose down
 ```
 
-### Stap 4: Open de applicatie
+### Stap 5: Open de applicatie
 
 Open http://localhost:8000 in je browser.
 
