@@ -17,6 +17,11 @@ from app.services.speech_service import get_transcriber, TranscriptionResult
 from app.services.export_service import ExportService
 from app.services.audio_converter import ACCEPTED_FORMATS, NATIVE_FORMATS, is_ffmpeg_available
 
+# Lazy import for Azure Speech (may not be configured)
+def _get_speech_transcriber():
+    from app.services.azure_speech_service import get_speech_transcriber
+    return get_speech_transcriber()
+
 
 def _configure_logging() -> None:
     """Configure logging in a way that plays nicely with uvicorn."""
@@ -103,6 +108,8 @@ async def get_config():
     return {
         "max_file_size_mb": settings.max_file_size_mb,
         "default_language": settings.default_language,
+        "default_engine": settings.transcription_engine,
+        "supported_engines": ["openai", "speech"],
         "supported_formats": sorted([ext.lstrip(".") for ext in ACCEPTED_FORMATS]),
         "native_formats": sorted([ext.lstrip(".") for ext in NATIVE_FORMATS]),
         "ffmpeg_available": is_ffmpeg_available(),
@@ -119,19 +126,22 @@ async def get_config():
 async def transcribe_audio(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    language: str = Form("nl")
+    language: str = Form("nl"),
+    engine: str = Form(None),  # "openai" or "speech" (Azure Speech Service)
 ):
     """
     Upload and transcribe an audio file with speaker diarization.
-    Uses gpt-4o-transcribe-diarize model.
     
     Args:
         file: The audio file to transcribe (max 25MB)
         language: Language code (default: nl for Dutch)
+        engine: Transcription engine - "openai" (GPT-4o) or "speech" (Azure Speech Service)
     
     Returns:
         Job ID for tracking the transcription
     """
+    # Use configured default if engine not specified
+    selected_engine = engine or settings.transcription_engine
     # Validate file
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -168,29 +178,38 @@ async def transcribe_audio(
         process_transcription,
         job_id=job_id,
         file_path=str(upload_path),
-        language=language
+        language=language,
+        engine=selected_engine,
     )
     
     return {
         "job_id": job_id,
         "status": "processing",
-        "message": "Transcription started"
+        "message": f"Transcription started (engine: {selected_engine})",
+        "engine": selected_engine,
     }
 
 
-async def process_transcription(job_id: str, file_path: str, language: str):
-    """Background task to process transcription using gpt-4o-transcribe-diarize."""
+async def process_transcription(job_id: str, file_path: str, language: str, engine: str = "openai"):
+    """Background task to process transcription."""
     try:
         logger.info(
             "Background transcription started",
-            extra={"job_id": job_id, "language": language, "file_path": file_path},
+            extra={"job_id": job_id, "language": language, "file_path": file_path, "engine": engine},
         )
-        transcriber = get_transcriber()
+        
+        if engine == "speech":
+            # Use Azure Speech Service
+            transcriber = _get_speech_transcriber()
+        else:
+            # Use Azure OpenAI (gpt-4o-transcribe-diarize)
+            transcriber = get_transcriber()
+        
         result = await transcriber.transcribe_file(file_path, language)
         transcription_store[job_id] = result
         logger.info(
             "Background transcription finished",
-            extra={"job_id": job_id, "status": result.status, "segments": len(result.segments)},
+            extra={"job_id": job_id, "status": result.status, "segments": len(result.segments), "engine": engine},
         )
     except Exception as e:
         if job_id in transcription_store:

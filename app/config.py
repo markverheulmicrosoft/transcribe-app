@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     # Diarization models require chunking_strategy; 'auto' is recommended.
     azure_openai_chunking_strategy_type: str | None = "auto"
     
+    # Azure Speech Service Configuration (alternative transcription backend)
+    azure_speech_key: str = ""
+    azure_speech_region: str = "westeurope"  # e.g., westeurope, eastus
+    
+    # Transcription engine: "openai" or "speech" (Azure Speech Service)
+    transcription_engine: str = "openai"
+    
     # Application settings
     upload_dir: str = "./uploads"
     max_file_size_mb: int = 25  # gpt-4o-transcribe-diarize limit is 25MB

@@ -6,6 +6,9 @@ python-multipart==0.0.19
 # Azure OpenAI SDK
 openai==1.58.1
 
+# Azure Speech Service SDK (for diarization with better Dutch support)
+azure-cognitiveservices-speech==1.42.0
+
 # HTTP requests for Azure REST API
 httpx==0.28.1
 aiofiles==24.1.0
