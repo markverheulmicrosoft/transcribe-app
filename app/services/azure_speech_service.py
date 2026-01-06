@@ -17,14 +17,40 @@ import httpx
 from app.config import get_settings
 from app.services.audio_converter import (
     convert_to_wav,
+    extract_audio_from_container,
     is_ffmpeg_available,
-    needs_conversion,
 )
 
 logger = logging.getLogger(__name__)
 
 # API version for Fast Transcription (2025-10-15 has improved diarization)
 FAST_TRANSCRIPTION_API_VERSION = "2025-10-15"
+
+# Formats natively supported by Azure Speech Fast Transcription
+# Source: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/batch-transcription-audio-data
+AZURE_SPEECH_NATIVE_FORMATS = {
+    ".wav", ".mp3", ".ogg", ".opus", ".flac", ".wma", ".aac", ".webm", ".amr", ".speex"
+}
+
+# Container formats that can have audio extracted without re-encoding
+# (e.g., ASF usually contains WMA audio which Azure Speech supports)
+ASF_LIKE_CONTAINERS = {".asf"}
+
+# Formats that need full conversion (re-encoding) for Azure Speech
+AZURE_SPEECH_CONVERTIBLE_FORMATS = {".avi", ".flv", ".wmv", ".m4a", ".mp4"}
+
+
+def _needs_conversion_for_speech(file_path: str) -> bool:
+    """Check if the file needs conversion for Azure Speech Fast Transcription."""
+    ext = os.path.splitext(file_path)[1].lower()
+    # Only convert if it's not in the native formats and not an extractable container
+    return ext not in AZURE_SPEECH_NATIVE_FORMATS and ext not in ASF_LIKE_CONTAINERS
+
+
+def _needs_extraction_for_speech(file_path: str) -> bool:
+    """Check if the file is a container that can have audio extracted."""
+    ext = os.path.splitext(file_path)[1].lower()
+    return ext in ASF_LIKE_CONTAINERS
 
 
 @dataclass
@@ -152,6 +178,7 @@ class AzureSpeechTranscriber:
         audio_file_path: str,
         language: str = "nl",
         on_progress: Callable[[str], None] | None = None,
+        phrase_list: list[str] | None = None,
     ) -> SpeechTranscriptionResult:
         """
         Transcribe an audio file with speaker diarization using Azure Speech Fast Transcription API.
@@ -160,6 +187,8 @@ class AzureSpeechTranscriber:
             audio_file_path: Path to the audio file (max 2 hours / 300MB)
             language: Language code (e.g., 'nl' for Dutch, 'en' for English)
             on_progress: Optional callback for progress updates
+            phrase_list: Optional list of words/phrases to boost recognition
+                         (e.g., ["Raad van State", "appellant", "verweerder"])
 
         Returns:
             SpeechTranscriptionResult with segments and speaker information
@@ -178,7 +207,7 @@ class AzureSpeechTranscriber:
             )
             return result
 
-        # Track if we created a converted file that needs cleanup
+        # Track if we created a converted/extracted file that needs cleanup
         converted_file_path: str | None = None
         file_to_transcribe = audio_file_path
 
@@ -199,8 +228,31 @@ class AzureSpeechTranscriber:
                 result.error = f"File size ({file_size_mb:.1f}MB) exceeds 300MB limit for Fast Transcription"
                 return result
 
-            # Check if file needs conversion (Fast Transcription supports many formats)
-            if needs_conversion(audio_file_path):
+            # Check if we need to extract audio from container (ASF -> WMA, no quality loss)
+            if _needs_extraction_for_speech(audio_file_path):
+                if on_progress:
+                    on_progress("Extracting audio from container (no re-encoding)...")
+
+                if not is_ffmpeg_available():
+                    result.status = "error"
+                    result.error = (
+                        "This file format requires ffmpeg for extraction. "
+                        "Please install ffmpeg or upload a supported format."
+                    )
+                    return result
+
+                converted_file_path = audio_file_path.rsplit(".", 1)[0] + "_extracted.wma"
+                logger.info(
+                    "Extracting audio from ASF container (no re-encoding, preserves quality)",
+                    extra={"audio_filename": result.filename, "output_path": converted_file_path},
+                )
+                extract_audio_from_container(audio_file_path, converted_file_path)
+                file_to_transcribe = converted_file_path
+
+                logger.info("Extraction complete", extra={"audio_filename": result.filename})
+
+            # Check if we need full conversion (re-encoding)
+            elif _needs_conversion_for_speech(audio_file_path):
                 if on_progress:
                     on_progress("Converting audio format...")
 
@@ -214,7 +266,7 @@ class AzureSpeechTranscriber:
 
                 converted_file_path = audio_file_path.rsplit(".", 1)[0] + "_speech_converted.wav"
                 logger.info(
-                    "Converting audio for Azure Speech",
+                    "Converting audio for Azure Speech (re-encoding)",
                     extra={"audio_filename": result.filename, "output_path": converted_file_path},
                 )
                 convert_to_wav(audio_file_path, converted_file_path)
@@ -242,6 +294,18 @@ class AzureSpeechTranscriber:
                 },
                 "profanityFilterMode": "None",  # Keep original text
             }
+
+            # Add phrase list if provided (improves recognition of domain-specific terms)
+            if phrase_list:
+                definition["phraseList"] = {"phrases": phrase_list}
+                logger.info(
+                    "Using phrase list for improved recognition",
+                    extra={
+                        "audio_filename": result.filename,
+                        "phrase_count": len(phrase_list),
+                        "phrases_sample": phrase_list[:5],
+                    },
+                )
 
             logger.info(
                 "Calling Azure Speech Fast Transcription API",

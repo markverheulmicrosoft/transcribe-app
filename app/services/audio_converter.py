@@ -64,15 +64,15 @@ def convert_to_wav(input_path: str, output_path: str | None = None) -> str:
     # -y: overwrite output file without asking
     # -i: input file
     # -acodec pcm_s16le: 16-bit PCM audio codec (standard WAV)
-    # -ar 16000: 16kHz sample rate (good for speech)
-    # -ac 1: mono (reduces file size, good for speech)
+    # -ar 16000: 16kHz sample rate (good for speech recognition)
+    # Note: We preserve stereo (-ac 2) to help diarization when speakers are on different channels
+    #       Azure Speech can handle stereo and mono files
     cmd = [
         "ffmpeg",
         "-y",
         "-i", input_path,
         "-acodec", "pcm_s16le",
         "-ar", "16000",
-        "-ac", "1",
         output_path
     ]
     
@@ -123,6 +123,61 @@ def get_audio_duration(file_path: str) -> float | None:
         pass
     
     return None
+
+
+def extract_audio_from_container(input_path: str, output_path: str | None = None) -> str:
+    """
+    Extract audio from a container format (like ASF) without re-encoding.
+    
+    This preserves original audio quality and is faster than conversion.
+    For ASF files, extracts to WMA which Azure Speech supports natively.
+    
+    Args:
+        input_path: Path to the input container file
+        output_path: Optional output path. If not provided, uses .wma extension.
+    
+    Returns:
+        Path to the extracted audio file
+    """
+    if not is_ffmpeg_available():
+        raise RuntimeError("ffmpeg is not installed")
+    
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+    
+    # For ASF containers, extract to WMA
+    if output_path is None:
+        input_path_obj = Path(input_path)
+        output_path = str(input_path_obj.with_suffix(".wma"))
+    
+    # Extract audio without re-encoding (-c:a copy)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", input_path,
+        "-vn",  # No video
+        "-c:a", "copy",  # Copy audio codec (no re-encoding)
+        output_path
+    ]
+    
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        
+        if result.returncode != 0:
+            raise RuntimeError(f"Audio extraction failed: {result.stderr}")
+        
+        if not os.path.exists(output_path):
+            raise RuntimeError("Extraction completed but output file not found")
+        
+        return output_path
+        
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Audio extraction timed out")
 
 
 def get_audio_info(file_path: str) -> dict:
