@@ -1,0 +1,29 @@
+services:
+  transcribe-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: transcribe-poc
+    ports:
+      - "8000:8000"
+    environment:
+      # Azure Speech Service credentials
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-westeurope}
+      # Application settings
+      - UPLOAD_DIR=/app/uploads
+      - MAX_FILE_SIZE_MB=500
+    volumes:
+      # Persist uploads (optional, for debugging)
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Optional: Add volume for persistent storage
+volumes:
+  uploads:

@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcriptie PoC - Raad van State</title>
+    <style>
+        :root {
+            --primary: #1a4b8c;
+            --primary-dark: #0d3366;
+            --secondary: #e8eef5;
+            --success: #28a745;
+            --error: #dc3545;
+            --warning: #ffc107;
+            --text: #333;
+            --text-light: #666;
+            --border: #ddd;
+            --bg: #f8f9fa;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 500;
+        }
+        
+        header p {
+            opacity: 0.85;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+        
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .card h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1.5rem;
+            color: var(--primary);
+        }
+        
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 3rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: var(--secondary);
+        }
+        
+        .upload-zone svg {
+            width: 64px;
+            height: 64px;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+        
+        .upload-zone p {
+            color: var(--text-light);
+            margin-bottom: 1rem;
+        }
+        
+        .upload-zone .formats {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .form-group {
+            margin-top: 1.5rem;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text);
+        }
+        
+        select {
+            width: 100%;
+            max-width: 300px;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-dark);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--secondary);
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--secondary);
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+        
+        .file-info svg {
+            width: 24px;
+            height: 24px;
+            color: var(--primary);
+        }
+        
+        .file-info .name {
+            flex: 1;
+            font-weight: 500;
+        }
+        
+        .file-info .size {
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+        
+        .file-info .remove {
+            color: var(--error);
+            cursor: pointer;
+            padding: 0.25rem;
+        }
+        
+        .progress-section {
+            margin-top: 2rem;
+            display: none;
+        }
+        
+        .progress-section.active {
+            display: block;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: var(--secondary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        
+        .progress-bar .fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-bar.indeterminate .fill {
+            width: 30%;
+            animation: indeterminate 1.5s infinite ease-in-out;
+        }
+        
+        @keyframes indeterminate {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+        
+        .status-message {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+        
+        .status-message.processing {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        
+        .status-message.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .status-message.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .result-section {
+            display: none;
+        }
+        
+        .result-section.active {
+            display: block;
+        }
+        
+        .transcript-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            background: #fafafa;
+        }
+        
+        .transcript-segment {
+            margin-bottom: 1.5rem;
+        }
+        
+        .transcript-segment:last-child {
+            margin-bottom: 0;
+        }
+        
+        .speaker-label {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 0.25rem;
+        }
+        
+        .speaker-text {
+            color: var(--text);
+        }
+        
+        .export-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .meta-info {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+        
+        .meta-item svg {
+            width: 18px;
+            height: 18px;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            main {
+                padding: 1rem;
+            }
+            
+            .card {
+                padding: 1.5rem;
+            }
+            
+            .upload-zone {
+                padding: 2rem 1rem;
+            }
+            
+            .meta-info {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🎙️ Transcriptie PoC</h1>
+        <p>Raad van State - Proof of Concept voor transcriptie met spreker-herkenning</p>
+    </header>
+    
+    <main>
+        <!-- Upload Section -->
+        <div class="card" id="uploadCard">
+            <h2>Audio Uploaden</h2>
+            
+            <div class="upload-zone" id="dropZone">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p>Sleep een audiobestand hierheen of klik om te selecteren</p>
+                <span class="formats">Ondersteunde formaten: WAV, MP3, M4A, OGG, FLAC</span>
+            </div>
+            
+            <input type="file" id="fileInput" accept=".wav,.mp3,.m4a,.ogg,.flac">
+            
+            <div class="file-info hidden" id="fileInfo">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+                <span class="name" id="fileName"></span>
+                <span class="size" id="fileSize"></span>
+                <span class="remove" id="removeFile" title="Verwijderen">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </span>
+            </div>
+            
+            <div class="form-group">
+                <label for="languageSelect">Taal van de opname</label>
+                <select id="languageSelect">
+                    <option value="nl" selected>Nederlands</option>
+                    <option value="en">English</option>
+                    <option value="de">Deutsch</option>
+                    <option value="fr">Français</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <button class="btn btn-primary" id="transcribeBtn" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                    Start Transcriptie
+                </button>
+            </div>
+            
+            <div class="progress-section" id="progressSection">
+                <div class="status-message processing" id="statusMessage">
+                    <div class="spinner"></div>
+                    <span id="statusText">Bezig met verwerken...</span>
+                </div>
+                <div class="progress-bar indeterminate">
+                    <div class="fill"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Result Section -->
+        <div class="card result-section" id="resultCard">
+            <h2>Transcriptie Resultaat</h2>
+            
+            <div class="meta-info" id="metaInfo">
+                <div class="meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span id="resultFilename"></span>
+                </div>
+                <div class="meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                    </svg>
+                    <span id="resultLocale"></span>
+                </div>
+                <div class="meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <span id="resultSpeakers"></span>
+                </div>
+            </div>
+            
+            <div class="transcript-container" id="transcriptContainer">
+                <!-- Transcript content will be inserted here -->
+            </div>
+            
+            <div class="export-buttons">
+                <button class="btn btn-success" id="exportWord">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download Word
+                </button>
+                <button class="btn btn-success" id="exportPdf">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download PDF
+                </button>
+                <button class="btn btn-secondary" id="newTranscription">
+                    Nieuwe Transcriptie
+                </button>
+            </div>
+        </div>
+    </main>
+    
+    <footer>
+        <p>Transcriptie PoC v0.1.0 | Azure OpenAI gpt-4o-transcribe-diarize met spreker-herkenning</p>
+    </footer>
+    
+    <script>
+        // DOM Elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const removeFile = document.getElementById('removeFile');
+        const localeSelect = document.getElementById('languageSelect');
+        const transcribeBtn = document.getElementById('transcribeBtn');
+        const progressSection = document.getElementById('progressSection');
+        const statusMessage = document.getElementById('statusMessage');
+        const statusText = document.getElementById('statusText');
+        const resultCard = document.getElementById('resultCard');
+        const transcriptContainer = document.getElementById('transcriptContainer');
+        const exportWord = document.getElementById('exportWord');
+        const exportPdf = document.getElementById('exportPdf');
+        const newTranscription = document.getElementById('newTranscription');
+        
+        // State
+        let selectedFile = null;
+        let currentJobId = null;
+        let pollInterval = null;
+        
+        // Utility functions
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function getLocaleName(code) {
+            const names = {
+                'nl': 'Nederlands',
+                'en': 'English',
+                'de': 'Deutsch',
+                'fr': 'Français'
+            };
+            return names[code] || code;
+        }
+        
+        // File handling
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        removeFile.addEventListener('click', () => {
+            selectedFile = null;
+            fileInput.value = '';
+            fileInfo.classList.add('hidden');
+            dropZone.classList.remove('hidden');
+            transcribeBtn.disabled = true;
+        });
+        
+        function handleFile(file) {
+            const allowedTypes = ['.wav', '.mp3', '.m4a', '.ogg', '.flac'];
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!allowedTypes.includes(ext)) {
+                alert('Ongeldig bestandsformaat. Gebruik: ' + allowedTypes.join(', '));
+                return;
+            }
+            
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.remove('hidden');
+            dropZone.classList.add('hidden');
+            transcribeBtn.disabled = false;
+        }
+        
+        // Transcription
+        transcribeBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            
+            transcribeBtn.disabled = true;
+            progressSection.classList.add('active');
+            statusMessage.className = 'status-message processing';
+            statusText.textContent = 'Bestand uploaden...';
+            
+            try {
+                // Upload file
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('language', localeSelect.value);
+                
+                const response = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Upload failed');
+                }
+                
+                const result = await response.json();
+                currentJobId = result.job_id;
+                
+                statusText.textContent = 'Transcriptie gestart, even geduld...';
+                
+                // Poll for results
+                pollInterval = setInterval(checkTranscriptionStatus, 2000);
+                
+            } catch (error) {
+                showError(error.message);
+            }
+        });
+        
+        async function checkTranscriptionStatus() {
+            if (!currentJobId) return;
+            
+            try {
+                const response = await fetch(`/api/transcription/${currentJobId}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to check status');
+                }
+                
+                const result = await response.json();
+                
+                if (result.status === 'completed' || result.status === 'completed_with_errors') {
+                    clearInterval(pollInterval);
+                    showResults(result);
+                } else if (result.status === 'error') {
+                    clearInterval(pollInterval);
+                    showError(result.error || 'Transcription failed');
+                } else {
+                    statusText.textContent = 'Bezig met transcriberen...';
+                }
+                
+            } catch (error) {
+                clearInterval(pollInterval);
+                showError(error.message);
+            }
+        }
+        
+        function showError(message) {
+            statusMessage.className = 'status-message error';
+            statusText.textContent = 'Fout: ' + message;
+            transcribeBtn.disabled = false;
+        }
+        
+        function showResults(result) {
+            progressSection.classList.remove('active');
+            resultCard.classList.add('active');
+            
+            // Update metadata
+            document.getElementById('resultFilename').textContent = result.filename;
+            document.getElementById('resultLocale').textContent = getLocaleName(result.language);
+            
+            // Count unique speakers
+            const speakers = new Set(result.segments.map(s => s.speaker_id));
+            document.getElementById('resultSpeakers').textContent = 
+                `${speakers.size} spreker${speakers.size !== 1 ? 's' : ''} gedetecteerd`;
+            
+            // Render transcript
+            renderTranscript(result.segments);
+        }
+        
+        function renderTranscript(segments) {
+            transcriptContainer.innerHTML = '';
+            
+            let currentSpeaker = null;
+            let currentDiv = null;
+            let currentText = [];
+            
+            segments.forEach((segment, index) => {
+                if (segment.speaker_id !== currentSpeaker) {
+                    // Save previous speaker's content
+                    if (currentDiv && currentText.length > 0) {
+                        const textP = document.createElement('p');
+                        textP.className = 'speaker-text';
+                        textP.textContent = currentText.join(' ');
+                        currentDiv.appendChild(textP);
+                    }
+                    
+                    // Start new speaker block
+                    currentSpeaker = segment.speaker_id;
+                    currentText = [segment.text];
+                    
+                    currentDiv = document.createElement('div');
+                    currentDiv.className = 'transcript-segment';
+                    
+                    const label = document.createElement('p');
+                    label.className = 'speaker-label';
+                    label.textContent = formatSpeakerId(currentSpeaker);
+                    currentDiv.appendChild(label);
+                    
+                    transcriptContainer.appendChild(currentDiv);
+                } else {
+                    currentText.push(segment.text);
+                }
+            });
+            
+            // Don't forget the last speaker
+            if (currentDiv && currentText.length > 0) {
+                const textP = document.createElement('p');
+                textP.className = 'speaker-text';
+                textP.textContent = currentText.join(' ');
+                currentDiv.appendChild(textP);
+            }
+        }
+        
+        function formatSpeakerId(id) {
+            if (id === 'Unknown') return 'Onbekende Spreker';
+            if (id.startsWith('Guest-')) {
+                const num = id.replace('Guest-', '');
+                return `Spreker ${num}`;
+            }
+            return id;
+        }
+        
+        // Export
+        exportWord.addEventListener('click', () => {
+            if (currentJobId) {
+                window.location.href = `/api/transcription/${currentJobId}/export/word`;
+            }
+        });
+        
+        exportPdf.addEventListener('click', () => {
+            if (currentJobId) {
+                window.location.href = `/api/transcription/${currentJobId}/export/pdf`;
+            }
+        });
+        
+        newTranscription.addEventListener('click', () => {
+            selectedFile = null;
+            currentJobId = null;
+            fileInput.value = '';
+            fileInfo.classList.add('hidden');
+            dropZone.classList.remove('hidden');
+            resultCard.classList.remove('active');
+            progressSection.classList.remove('active');
+            transcribeBtn.disabled = true;
+            transcriptContainer.innerHTML = '';
+        });
+    </script>
+</body>
+</html>
