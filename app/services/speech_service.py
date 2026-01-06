@@ -9,6 +9,11 @@ from typing import Callable
 from openai import AzureOpenAI
 
 from app.config import get_settings
+from app.services.audio_converter import (
+    needs_conversion,
+    convert_to_wav,
+    is_ffmpeg_available,
+)
 
 
 @dataclass
@@ -133,19 +138,44 @@ class SpeechTranscriber:
             result.error = f"Audio file not found: {audio_file_path}"
             return result
         
-        # Check file size (25MB limit for gpt-4o-transcribe-diarize)
-        file_size_mb = os.path.getsize(audio_file_path) / (1024 * 1024)
-        if file_size_mb > 25:
-            result.status = "error"
-            result.error = f"File size ({file_size_mb:.1f}MB) exceeds 25MB limit for gpt-4o-transcribe-diarize"
-            return result
+        # Track if we created a converted file that needs cleanup
+        converted_file_path: str | None = None
+        file_to_transcribe = audio_file_path
         
         try:
+            # Check if file needs conversion (ASF, WMA, etc.)
+            if needs_conversion(audio_file_path):
+                if on_progress:
+                    on_progress("Converting audio format to WAV...")
+                
+                if not is_ffmpeg_available():
+                    result.status = "error"
+                    result.error = (
+                        "This file format requires ffmpeg for conversion. "
+                        "Please install ffmpeg or upload a supported format (MP3, WAV, M4A, MP4, WEBM)."
+                    )
+                    return result
+                
+                # Convert to WAV
+                converted_file_path = audio_file_path.rsplit(".", 1)[0] + "_converted.wav"
+                convert_to_wav(audio_file_path, converted_file_path)
+                file_to_transcribe = converted_file_path
+                
+                if on_progress:
+                    on_progress("Conversion complete, starting transcription...")
+            
+            # Check file size (25MB limit for gpt-4o-transcribe-diarize)
+            file_size_mb = os.path.getsize(file_to_transcribe) / (1024 * 1024)
+            if file_size_mb > 25:
+                result.status = "error"
+                result.error = f"File size ({file_size_mb:.1f}MB) exceeds 25MB limit for gpt-4o-transcribe-diarize"
+                return result
+            
             if on_progress:
                 on_progress("Starting transcription with gpt-4o-transcribe-diarize...")
             
             # Open and send file to Azure OpenAI
-            with open(audio_file_path, "rb") as audio_file:
+            with open(file_to_transcribe, "rb") as audio_file:
                 # Call the transcription API with diarization
                 # The gpt-4o-transcribe-diarize model returns speaker labels
                 response = self.client.audio.transcriptions.create(
@@ -200,6 +230,14 @@ class SpeechTranscriber:
             result.error = str(e)
             if on_progress:
                 on_progress(f"Error: {str(e)}")
+        
+        finally:
+            # Clean up converted file if we created one
+            if converted_file_path and os.path.exists(converted_file_path):
+                try:
+                    os.remove(converted_file_path)
+                except OSError:
+                    pass  # Ignore cleanup errors
         
         return result
     

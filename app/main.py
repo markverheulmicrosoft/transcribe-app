@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.services.speech_service import get_transcriber, TranscriptionResult
 from app.services.export_service import ExportService
+from app.services.audio_converter import ACCEPTED_FORMATS, NATIVE_FORMATS, is_ffmpeg_available
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -79,7 +80,9 @@ async def get_config():
     return {
         "max_file_size_mb": settings.max_file_size_mb,
         "default_language": settings.default_language,
-        "supported_formats": ["wav", "mp3", "m4a", "mp4", "mpeg", "mpga", "webm"],
+        "supported_formats": sorted([ext.lstrip(".") for ext in ACCEPTED_FORMATS]),
+        "native_formats": sorted([ext.lstrip(".") for ext in NATIVE_FORMATS]),
+        "ffmpeg_available": is_ffmpeg_available(),
         "supported_languages": [
             {"code": "nl", "name": "Nederlands"},
             {"code": "en", "name": "English"},
@@ -110,13 +113,12 @@ async def transcribe_audio(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     
-    # Check file extension (supported by gpt-4o-transcribe-diarize)
-    allowed_extensions = {".wav", ".mp3", ".m4a", ".mp4", ".mpeg", ".mpga", ".webm"}
+    # Check file extension (native + convertible formats)
     file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in allowed_extensions:
+    if file_ext not in ACCEPTED_FORMATS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file format. Allowed: {', '.join(allowed_extensions)}"
+            detail=f"Unsupported file format. Allowed: {', '.join(sorted(ACCEPTED_FORMATS))}"
         )
     
     # Generate job ID
