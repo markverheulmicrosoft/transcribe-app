@@ -23,8 +23,8 @@ from app.services.audio_converter import (
 
 logger = logging.getLogger(__name__)
 
-# API version for Fast Transcription
-FAST_TRANSCRIPTION_API_VERSION = "2024-11-15"
+# API version for Fast Transcription (2025-10-15 has improved diarization)
+FAST_TRANSCRIPTION_API_VERSION = "2025-10-15"
 
 
 @dataclass
@@ -232,12 +232,13 @@ class AzureSpeechTranscriber:
             )
 
             # Build the definition with diarization enabled
+            # Note: The docs example shows {"maxSpeakers": 2, "enabled": true}
             locale = self._get_locale(language)
             definition = {
                 "locales": [locale],
                 "diarization": {
-                    "enabled": True,
                     "maxSpeakers": 10,  # Support up to 10 speakers in meetings
+                    "enabled": True,
                 },
                 "profanityFilterMode": "None",  # Keep original text
             }
@@ -248,6 +249,7 @@ class AzureSpeechTranscriber:
                     "audio_filename": result.filename,
                     "locale": locale,
                     "endpoint": endpoint,
+                    "definition": json.dumps(definition),
                     "file_size_mb": round(file_size_mb, 2),
                 },
             )
@@ -304,6 +306,34 @@ class AzureSpeechTranscriber:
 
             # Parse the response
             response_data = response.json()
+
+            # Log the full response for debugging
+            logger.info(
+                "Azure Speech API response structure",
+                extra={
+                    "audio_filename": result.filename,
+                    "has_combinedPhrases": "combinedPhrases" in response_data,
+                    "has_phrases": "phrases" in response_data,
+                    "phrases_count": len(response_data.get("phrases", [])),
+                    "first_phrase_has_speaker": (
+                        response_data.get("phrases", [{}])[0].get("speaker") is not None
+                        if response_data.get("phrases") else False
+                    ),
+                    "response_keys": list(response_data.keys()),
+                },
+            )
+
+            # Log first few phrases to see speaker data
+            for i, phrase in enumerate(response_data.get("phrases", [])[:3]):
+                logger.info(
+                    f"Phrase {i} sample",
+                    extra={
+                        "audio_filename": result.filename,
+                        "phrase_keys": list(phrase.keys()),
+                        "speaker": phrase.get("speaker"),
+                        "text": phrase.get("text", "")[:50],
+                    },
+                )
 
             # Extract duration
             duration_ms = response_data.get("durationMilliseconds", 0)
