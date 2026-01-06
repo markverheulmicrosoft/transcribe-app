@@ -3,10 +3,12 @@ Azure OpenAI transcription service using gpt-4o-transcribe-diarize model.
 This model provides speech-to-text with built-in speaker diarization.
 """
 import os
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable
 from openai import AzureOpenAI
+from openai import BadRequestError
 
 from app.config import get_settings
 from app.services.audio_converter import (
@@ -14,6 +16,9 @@ from app.services.audio_converter import (
     convert_to_wav,
     is_ffmpeg_available,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -119,6 +124,45 @@ class SpeechTranscriber:
                 if value is not None:
                     return str(value)
         return None
+
+    def _summarize_response_for_logs(self, response) -> dict:
+        """Return a small, safe summary for logging (no transcript text)."""
+        summary: dict = {
+            "has_text": hasattr(response, "text"),
+            "text_len": None,
+            "has_segments": hasattr(response, "segments"),
+            "segments_count": None,
+            "duration": getattr(response, "duration", None),
+        }
+        try:
+            text = getattr(response, "text", None)
+            if isinstance(text, str):
+                summary["text_len"] = len(text)
+        except Exception:
+            pass
+
+        try:
+            segments = getattr(response, "segments", None)
+            if segments is not None:
+                summary["segments_count"] = len(segments)
+        except Exception:
+            pass
+
+        # Inspect a single segment for speaker-like fields (names only)
+        try:
+            segments = getattr(response, "segments", None) or []
+            if segments:
+                seg0 = segments[0]
+                speaker_fields = [
+                    name
+                    for name in ("speaker", "speaker_id", "speakerId", "speaker_label", "speakerLabel")
+                    if hasattr(seg0, name)
+                ]
+                summary["segment0_speaker_fields"] = speaker_fields
+        except Exception:
+            pass
+
+        return summary
     
     async def transcribe_file(
         self,
@@ -145,6 +189,10 @@ class SpeechTranscriber:
         if not os.path.exists(audio_file_path):
             result.status = "error"
             result.error = f"Audio file not found: {audio_file_path}"
+            logger.warning(
+                "Audio file missing",
+                    extra={"path": audio_file_path, "audio_filename": result.filename},
+            )
             return result
         
         # Track if we created a converted file that needs cleanup
@@ -152,12 +200,34 @@ class SpeechTranscriber:
         file_to_transcribe = audio_file_path
         
         try:
+            logger.info(
+                "Starting transcription",
+                extra={
+                    "audio_filename": result.filename,
+                    "language": language,
+                    "deployment": self.settings.azure_openai_deployment_name,
+                    "api_version": self.settings.azure_openai_api_version,
+                },
+            )
+
             # Check if file needs conversion (ASF, WMA, etc.)
-            if needs_conversion(audio_file_path):
+            conversion_needed = needs_conversion(audio_file_path)
+            logger.info(
+                "Checked conversion requirement",
+                extra={"audio_filename": result.filename, "needs_conversion": conversion_needed},
+            )
+
+            if conversion_needed:
                 if on_progress:
                     on_progress("Converting audio format to WAV...")
                 
-                if not is_ffmpeg_available():
+                ffmpeg_ok = is_ffmpeg_available()
+                logger.info(
+                    "Checked ffmpeg availability",
+                    extra={"audio_filename": result.filename, "ffmpeg_available": ffmpeg_ok},
+                )
+
+                if not ffmpeg_ok:
                     result.status = "error"
                     result.error = (
                         "This file format requires ffmpeg for conversion. "
@@ -167,14 +237,27 @@ class SpeechTranscriber:
                 
                 # Convert to WAV
                 converted_file_path = audio_file_path.rsplit(".", 1)[0] + "_converted.wav"
+                logger.info(
+                    "Starting conversion to WAV",
+                    extra={"audio_filename": result.filename, "output_path": converted_file_path},
+                )
                 convert_to_wav(audio_file_path, converted_file_path)
                 file_to_transcribe = converted_file_path
+
+                logger.info(
+                    "Conversion complete",
+                    extra={"audio_filename": result.filename, "file_to_transcribe": file_to_transcribe},
+                )
                 
                 if on_progress:
                     on_progress("Conversion complete, starting transcription...")
             
             # Check file size (25MB limit for gpt-4o-transcribe-diarize)
             file_size_mb = os.path.getsize(file_to_transcribe) / (1024 * 1024)
+            logger.info(
+                "Checked file size",
+                extra={"audio_filename": result.filename, "file_size_mb": round(file_size_mb, 3)},
+            )
             if file_size_mb > 25:
                 result.status = "error"
                 result.error = f"File size ({file_size_mb:.1f}MB) exceeds 25MB limit for gpt-4o-transcribe-diarize"
@@ -182,29 +265,92 @@ class SpeechTranscriber:
             
             if on_progress:
                 on_progress("Starting transcription with gpt-4o-transcribe-diarize...")
+
+            logger.info(
+                "Prepared audio file",
+                extra={
+                    "audio_filename": result.filename,
+                    "file_size_mb": round(file_size_mb, 3),
+                    "converted": converted_file_path is not None,
+                },
+            )
             
             # Open and send file to Azure OpenAI
             with open(file_to_transcribe, "rb") as audio_file:
-                # Use verbose_json to receive segments (required for timestamps; also where diarization labels may appear).
+                requested_format = (self.settings.azure_openai_transcription_response_format or "json").strip()
+
+                # Diarization deployments require chunking_strategy. If not explicitly configured,
+                # default to 'auto' when the deployment name suggests a diarization model.
+                configured_chunking = (self.settings.azure_openai_chunking_strategy_type or "").strip() or None
+                inferred_chunking = None
+                if not configured_chunking and "diarize" in (self.settings.azure_openai_deployment_name or "").lower():
+                    inferred_chunking = "auto"
+
+                effective_chunking = configured_chunking or inferred_chunking
+
+                # Build API call parameters.
+                # chunking_strategy must be passed as a direct kwarg (string "auto"), NOT via extra_body.
                 create_kwargs: dict = {
                     "model": self.settings.azure_openai_deployment_name,
                     "file": audio_file,
                     "language": language,
-                    "response_format": "verbose_json",
+                    "response_format": requested_format,
                 }
-                if self.settings.azure_openai_chunking_strategy_type:
-                    create_kwargs["extra_body"] = {
-                        "chunking_strategy": {"type": self.settings.azure_openai_chunking_strategy_type}
-                    }
+                if effective_chunking:
+                    create_kwargs["chunking_strategy"] = effective_chunking
 
-                response = self.client.audio.transcriptions.create(**create_kwargs)
+                logger.info(
+                    "Calling Azure transcription",
+                    extra={
+                        "deployment": self.settings.azure_openai_deployment_name,
+                        "language": language,
+                        "response_format": create_kwargs.get("response_format"),
+                        "chunking_strategy": effective_chunking,
+                        "chunking_inferred": inferred_chunking is not None and configured_chunking is None,
+                    },
+                )
+
+                try:
+                    response = self.client.audio.transcriptions.create(**create_kwargs)
+                except BadRequestError as e:
+                    # If the configured response_format is unsupported by the deployed model, retry with json.
+                    message = str(e)
+                    if (
+                        create_kwargs.get("response_format") != "json"
+                        and "response_format" in message
+                        and "not compatible" in message
+                    ):
+                        logger.warning(
+                            "response_format rejected by model; retrying with json",
+                            extra={"requested": create_kwargs.get("response_format")},
+                        )
+                        if on_progress:
+                            on_progress("Azure rejected response_format; retrying with json...")
+                        create_kwargs["response_format"] = "json"
+                        response = self.client.audio.transcriptions.create(**create_kwargs)
+                    else:
+                        raise
             
             if on_progress:
                 on_progress("Processing transcription response...")
+
+            logger.info(
+                "Received transcription response",
+                extra=self._summarize_response_for_logs(response),
+            )
             
             # Parse the response
             result.full_text = getattr(response, "text", "") or ""
             result.duration_seconds = float(getattr(response, "duration", 0.0) or 0.0)
+
+            logger.info(
+                "Parsed transcription top-level fields",
+                extra={
+                    "audio_filename": result.filename,
+                    "full_text_len": len(result.full_text),
+                    "duration_seconds": result.duration_seconds,
+                },
+            )
             
             # Parse segments with speaker information
             # The diarize model includes speaker labels in the response
@@ -243,12 +389,21 @@ class SpeechTranscriber:
             result.error = str(e)
             if on_progress:
                 on_progress(f"Error: {str(e)}")
+
+            logger.exception(
+                "Transcription failed",
+                extra={"audio_filename": result.filename, "language": language},
+            )
         
         finally:
             # Clean up converted file if we created one
             if converted_file_path and os.path.exists(converted_file_path):
                 try:
                     os.remove(converted_file_path)
+                    logger.info(
+                        "Cleaned up converted file",
+                        extra={"audio_filename": result.filename, "converted_file_path": converted_file_path},
+                    )
                 except OSError:
                     pass  # Ignore cleanup errors
         

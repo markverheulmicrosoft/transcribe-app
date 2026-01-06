@@ -2,6 +2,7 @@
 Main FastAPI application for the Transcription PoC.
 """
 import os
+import logging
 import uuid
 import shutil
 from pathlib import Path
@@ -15,6 +16,28 @@ from app.config import get_settings
 from app.services.speech_service import get_transcriber, TranscriptionResult
 from app.services.export_service import ExportService
 from app.services.audio_converter import ACCEPTED_FORMATS, NATIVE_FORMATS, is_ffmpeg_available
+
+
+def _configure_logging() -> None:
+    """Configure logging in a way that plays nicely with uvicorn."""
+    level_name = (os.getenv("LOG_LEVEL") or "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        )
+    else:
+        root_logger.setLevel(level)
+
+    # Ensure our app loggers are at least at the configured level.
+    logging.getLogger("app").setLevel(level)
+
+
+_configure_logging()
+logger = logging.getLogger("app.main")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -158,17 +181,30 @@ async def transcribe_audio(
 async def process_transcription(job_id: str, file_path: str, language: str):
     """Background task to process transcription using gpt-4o-transcribe-diarize."""
     try:
+        logger.info(
+            "Background transcription started",
+            extra={"job_id": job_id, "language": language, "file_path": file_path},
+        )
         transcriber = get_transcriber()
         result = await transcriber.transcribe_file(file_path, language)
         transcription_store[job_id] = result
+        logger.info(
+            "Background transcription finished",
+            extra={"job_id": job_id, "status": result.status, "segments": len(result.segments)},
+        )
     except Exception as e:
         if job_id in transcription_store:
             transcription_store[job_id].status = "error"
             transcription_store[job_id].error = str(e)
+        logger.exception(
+            "Background transcription failed",
+            extra={"job_id": job_id, "file_path": file_path},
+        )
     finally:
         # Clean up uploaded file
         try:
             os.remove(file_path)
+            logger.info("Cleaned up uploaded file", extra={"job_id": job_id, "file_path": file_path})
         except:
             pass
 

@@ -19,9 +19,12 @@ class Settings(BaseSettings):
     azure_openai_endpoint: str = ""
     azure_openai_api_key: str = ""
     azure_openai_deployment_name: str = "gpt-4o-transcribe-diarize"
-    azure_openai_api_version: str = "2024-10-21"  # Data plane inference GA (supports /audio/transcriptions)
-    # Optional: only enable if your Azure resource supports it (otherwise it may 400)
-    azure_openai_chunking_strategy_type: str | None = None
+    # Use the preview API version for diarization (diarized_json support).
+    azure_openai_api_version: str = "2025-04-01-preview"
+    # For gpt-4o-transcribe-diarize use 'diarized_json' to receive speaker labels.
+    azure_openai_transcription_response_format: str = "diarized_json"
+    # Diarization models require chunking_strategy; 'auto' is recommended.
+    azure_openai_chunking_strategy_type: str | None = "auto"
     
     # Application settings
     upload_dir: str = "./uploads"
