@@ -74,8 +74,26 @@ Dit model is de ideale keuze voor deze PoC omdat het:
 - **Model naam**: `gpt-4o-transcribe-diarize`
 - **Versie**: 2025-10-15
 - **Max bestandsgrootte**: 25 MB
-- **Ondersteunde formaten**: MP3, MP4, MPEG, MPGA, M4A, WAV, WEBM
+- **Native formaten**: MP3, MP4, MPEG, MPGA, M4A, WAV, WEBM
+- **Converteerbare formaten**: ASF, WMA, AVI, OGG, FLAC, AAC (via ffmpeg)
 - **Output**: Verbose JSON met segments en speaker labels
+
+### Audio Conversie
+
+Bestanden in niet-native formaten (zoals ASF) worden automatisch geconverteerd naar WAV met ffmpeg:
+
+```
+ASF/WMA bestand → ffmpeg conversie → WAV (16kHz, mono) → gpt-4o-transcribe-diarize
+```
+
+**Vereiste**: ffmpeg moet geïnstalleerd zijn voor conversie:
+```bash
+# Ubuntu/Debian
+sudo apt-get install ffmpeg
+
+# macOS
+brew install ffmpeg
+```
 
 ## Installatie
 
@@ -83,6 +101,7 @@ Dit model is de ideale keuze voor deze PoC omdat het:
 
 - Python 3.12+ (voor lokale development)
 - [UV](https://docs.astral.sh/uv/) - snelle Python package manager (aanbevolen)
+- ffmpeg (voor ASF/WMA conversie)
 - Docker en Docker Compose (voor container deployment)
 - Azure OpenAI Service met gpt-4o-transcribe-diarize deployment (via Azure Foundry)
 

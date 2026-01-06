@@ -567,11 +567,22 @@
         });
         
         function handleFile(file) {
-            const allowedTypes = ['.wav', '.mp3', '.m4a', '.ogg', '.flac'];
+            // Native formats + convertible formats (ASF, WMA, etc. converted via ffmpeg)
+            const allowedTypes = [
+                '.wav', '.mp3', '.m4a', '.mp4', '.webm', '.mpeg', '.mpga',  // native
+                '.asf', '.wma', '.avi', '.ogg', '.flac', '.aac', '.wmv'     // convertible
+            ];
             const ext = '.' + file.name.split('.').pop().toLowerCase();
             
             if (!allowedTypes.includes(ext)) {
                 alert('Ongeldig bestandsformaat. Gebruik: ' + allowedTypes.join(', '));
+                return;
+            }
+            
+            // Check file size (25MB limit)
+            const maxSize = 25 * 1024 * 1024;
+            if (file.size > maxSize) {
+                alert('Bestand is te groot. Maximum grootte is 25MB.');
                 return;
             }
             
