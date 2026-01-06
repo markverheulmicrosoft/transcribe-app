@@ -2,12 +2,18 @@
 Configuration settings for the Transcribe App.
 Loads settings from environment variables.
 """
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
     
     # Azure OpenAI Configuration
     azure_openai_endpoint: str = ""
@@ -20,10 +26,6 @@ class Settings(BaseSettings):
     
     # Default language for transcription
     default_language: str = "nl"  # Dutch as default for Raad van State
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 @lru_cache()

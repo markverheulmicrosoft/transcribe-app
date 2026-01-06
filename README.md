@@ -81,7 +81,9 @@ Dit model is de ideale keuze voor deze PoC omdat het:
 
 ### Vereisten
 
-- Docker en Docker Compose
+- Python 3.12+ (voor lokale development)
+- [UV](https://docs.astral.sh/uv/) - snelle Python package manager (aanbevolen)
+- Docker en Docker Compose (voor container deployment)
 - Azure OpenAI Service met gpt-4o-transcribe-diarize deployment (via Azure Foundry)
 
 ### Stap 1: Clone en configureer
@@ -105,15 +107,39 @@ AZURE_OPENAI_API_KEY=your-api-key-here
 AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o-transcribe-diarize
 ```
 
-### Stap 3: Start de applicatie
+### Stap 3: Lokale Development (met UV)
 
 ```bash
-# Met Docker Compose
-docker-compose up -d
+# Installeer UV (indien nog niet geïnstalleerd)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Of lokaal voor development
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+# Installeer dependencies (incl. dev tools)
+make dev
+# of: uv sync
+
+# Start de applicatie met hot reload
+make run
+# of: uv run uvicorn app.main:app --reload
+
+# Run tests
+make test
+# of: uv run pytest -v
+
+# Lint en format code
+make lint
+make format
+```
+
+### Stap 3b: Docker Deployment
+
+```bash
+# Build en start met Docker Compose
+make docker-run
+# of: docker-compose up -d
+
+# Stop containers
+make docker-stop
+# of: docker-compose down
 ```
 
 ### Stap 4: Open de applicatie
@@ -127,6 +153,58 @@ Open http://localhost:8000 in je browser.
 3. **Start** de transcriptie
 4. **Bekijk** het resultaat met spreker-labels (automatisch gedetecteerd)
 5. **Exporteer** naar Word of PDF
+
+## Development
+
+### Project Structuur
+
+```
+transcribe-app/
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # FastAPI applicatie
+│   ├── config.py            # Configuratie settings
+│   ├── services/
+│   │   ├── speech_service.py    # Azure OpenAI transcriptie
+│   │   └── export_service.py    # Word/PDF export
+│   └── static/
+│       └── index.html       # Frontend UI
+├── tests/
+│   └── test_api.py          # API tests
+├── pyproject.toml           # Project configuratie (UV/pip)
+├── Makefile                 # Development commands
+├── Dockerfile
+├── docker-compose.yml
+└── README.md
+```
+
+### Beschikbare Make Commands
+
+| Command | Beschrijving |
+|---------|--------------|
+| `make dev` | Installeer alle dependencies met UV |
+| `make run` | Start app lokaal met hot reload |
+| `make test` | Run pytest tests |
+| `make test-cov` | Tests met coverage report |
+| `make lint` | Run ruff linter |
+| `make format` | Format code met ruff |
+| `make typecheck` | Run mypy type checker |
+| `make docker-build` | Build Docker image |
+| `make docker-run` | Start met Docker Compose |
+| `make clean` | Verwijder cache bestanden |
+
+### Testing
+
+```bash
+# Run alle tests
+make test
+
+# Run tests met coverage
+make test-cov
+
+# Run specifieke test
+uv run pytest tests/test_api.py::TestHealthEndpoints -v
+```
 
 ## Veiligheid en Compliance
 
