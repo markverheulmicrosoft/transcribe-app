@@ -350,7 +350,121 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 0;
+            gap: 0.5rem;
+        }
         
+        .tab {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            font-weight: 600;
+            color: var(--text-light);
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+        
+        .tab:hover {
+            color: var(--primary);
+            background: rgba(0,0,0,0.02);
+        }
+        
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            background: white;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Proces Verbaal Styles */
+        .pv-container {
+            background: #f4f4f4;
+            padding: 2rem;
+            border: 1px solid var(--border);
+            border-top: none;
+        }
+
+        .pv-document {
+            font-family: 'Times New Roman', Times, serif;
+            line-height: 1.8;
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 3rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            color: black;
+        }
+        
+        .pv-title {
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.4rem;
+            margin-bottom: 2rem;
+            text-transform: uppercase;
+            text-decoration: underline;
+        }
+        
+        .pv-section {
+            margin-bottom: 1.5rem;
+        }
+        
+        .pv-label {
+            font-weight: bold;
+            display: inline-block;
+            width: 150px;
+        }
+
+        .pv-header-block {
+            margin-bottom: 2rem;
+        }
+        
+        .pv-text-block {
+            margin-bottom: 1rem;
+            text-align: justify;
+        }
+        
+        .pv-signature {
+            margin-top: 3rem;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .pv-sig-line {
+            border-top: 1px solid black;
+            width: 200px;
+            margin-top: 3rem;
+            text-align: center;
+            padding-top: 0.5rem;
+        }
+
+        /* Legal Links */
+        .legal-link {
+            color: #2c5282;
+            text-decoration: none;
+            border-bottom: 1px dotted #2c5282;
+            background-color: #ebf8ff;
+            padding: 0 2px;
+            border-radius: 2px;
+            transition: all 0.2s;
+        }
+        
+        .legal-link:hover {
+            background-color: #bee3f8;
+            border-bottom: 1px solid #2c5282;
+        }
+
         @media (max-width: 768px) {
             main {
                 padding: 1rem;
@@ -446,7 +560,7 @@
         
         <!-- Result Section -->
         <div class="card result-section" id="resultCard">
-            <h2>Transcriptie Resultaat</h2>
+            <h2>Dossier Analyse</h2>
             
             <div class="meta-info" id="metaInfo">
                 <div class="meta-item">
@@ -469,8 +583,36 @@
                 </div>
             </div>
             
-            <div class="transcript-container" id="transcriptContainer">
-                <!-- Transcript content will be inserted here -->
+            <!-- Tabs Navigation -->
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('transcript')">📝 Transcriptie</div>
+                <div class="tab" onclick="switchTab('pv')">📋 Concept Proces-Verbaal</div>
+                <div class="tab" onclick="switchTab('links')">⚖️ Juridische Entiteiten</div>
+            </div>
+
+            <!-- Tab 1: Transcript -->
+            <div class="tab-content active" id="tab-transcript">
+                <div class="transcript-container" id="transcriptContainer" style="border-top: none; border-top-left-radius: 0; border-top-right-radius: 0;">
+                    <!-- Transcript content will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Tab 2: Proces Verbaal -->
+            <div class="tab-content" id="tab-pv">
+                <div class="pv-container" id="pvContainer">
+                    <!-- PV content will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Tab 3: Entities/Links -->
+            <div class="tab-content" id="tab-links">
+                <div class="transcript-container" style="border-top: none; border-top-left-radius: 0; border-top-right-radius: 0;">
+                    <h3>Gedetecteerde Wetsartikelen</h3>
+                    <p style="margin-bottom: 1rem; color: var(--text-light); font-size: 0.9em;">
+                        De volgende artikelen zijn automatisch herkend en gelinkt aan wetten.overheid.nl:
+                    </p>
+                    <ul id="legalEntitiesList" style="margin-left: 1.5rem; line-height: 1.8;"></ul>
+                </div>
             </div>
             
             <div class="export-buttons">
@@ -693,8 +835,147 @@
             
             // Render transcript
             renderTranscript(result.segments);
+            
+            // Generate Proces Verbaal
+            generateProcesVerbaal(result);
+            
+            // Extract and list entities
+            renderLegalEntities(result.segments);
         }
         
+        function switchTab(tabName) {
+            // Update tabs
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            
+            // Update content
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function linkifyLegalTerms(text) {
+            const lawMap = {
+                'Awb': 'BWBR0005537',
+                'Algemene wet bestuursrecht': 'BWBR0005537',
+                'Woo': 'BWBR0045754',
+                'Wet open overheid': 'BWBR0045754',
+                'Gemeentewet': 'BWBR0005416',
+                'Vreemdelingenwet': 'BWBR0011823',
+                'Vw': 'BWBR0011823',
+                'Wro': 'BWBR0020449',
+                'Wabo': 'BWBR0024779'
+            };
+
+            const escaped = escapeHtml(text);
+            const pattern = new RegExp(`(Artikel|art\\.?)\\s+([0-9]+(?::[0-9a-zA-Z\\.]+)?)\\s+(?:van\\s+(?:de|het)\\s+)?(${Object.keys(lawMap).join('|')})`, 'gi');
+
+            return escaped.replace(pattern, (match, prefix, article, lawName) => {
+                const cleanLawName = Object.keys(lawMap).find(key => key.toLowerCase() === lawName.toLowerCase());
+                const bwbId = lawMap[cleanLawName];
+                
+                if (bwbId) {
+                    const url = `https://wetten.overheid.nl/jci1.3:c:${bwbId}&artikel=${article}`;
+                    return `${prefix} <a href="${url}" target="_blank" class="legal-link" title="Open ${lawName} art. ${article}">${article}</a> ${lawName}`;
+                }
+                return match;
+            });
+        }
+        
+        function renderLegalEntities(segments) {
+            const list = document.getElementById('legalEntitiesList');
+            list.innerHTML = '';
+            
+            const fullText = segments.map(s => s.text).join(' ');
+            const lawMap = {'Awb': 'Algemene wet bestuursrecht', 'Woo': 'Wet open overheid', 'Gemeentewet': 'Gemeentewet'};
+            const pattern = new RegExp(`(Artikel|art\\.?)\\s+([0-9]+(?::[0-9a-zA-Z\\.]+)?)\\s+(?:van\\s+(?:de|het)\\s+)?(${Object.keys(lawMap).join('|')})`, 'gi');
+            
+            const matches = [...fullText.matchAll(pattern)];
+            const unique = new Set(matches.map(m => m[0]));
+            
+            if (unique.size === 0) {
+                list.innerHTML = '<li><i>Geen specifieke wetsartikelen gevonden in dit fragment.</i></li>';
+                return;
+            }
+
+            unique.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = linkifyLegalTerms(item);
+                list.appendChild(li);
+            });
+        }
+
+        function generateProcesVerbaal(result) {
+            const container = document.getElementById('pvContainer');
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
+            
+            const speakers = [...new Set(result.segments.map(s => s.speaker_id))];
+            
+            let contentHtml = `
+                <div class="pv-document">
+                    <div class="pv-title">Proces-Verbaal van de Zitting</div>
+                    
+                    <div class="pv-header-block">
+                        <div class="pv-section">
+                            <span class="pv-label">Instantie:</span> RAAD VAN STATE<br>
+                            <span class="pv-label">Afdeling:</span> Bestuursrechtspraak<br>
+                            <span class="pv-label">Datum zitting:</span> ${dateStr}<br>
+                            <span class="pv-label">Locatie:</span> Den Haag
+                        </div>
+                        
+                        <div class="pv-section">
+                            <strong>Tegenwoordig:</strong><br>
+                            (Voorzitter en griffier in te vullen)
+                        </div>
+
+                        <div class="pv-section">
+                            <strong>Verschenen personen:</strong><br>
+                            ${speakers.map(s => `• ${formatSpeakerId(s)}`).join('<br>')}
+                        </div>
+                    </div>
+
+                    <div class="pv-section">
+                        <strong>Het verhandelde ter zitting:</strong>
+                        <div class="pv-text-block">
+                            De voorzitter opent de zitting en zet de zaak uiteen.
+                        </div>
+            `;
+            
+            let currentSpeaker = null;
+            result.segments.forEach(seg => {
+                if (seg.speaker_id !== currentSpeaker) {
+                    contentHtml += `<div class="pv-text-block"><strong>${formatSpeakerId(seg.speaker_id)}:</strong> "`;
+                    contentHtml += seg.text.length > 300 ? seg.text.substring(0, 300) + '...' : seg.text;
+                    contentHtml += `"</div>`;
+                    currentSpeaker = seg.speaker_id;
+                }
+            });
+
+            contentHtml += `
+                        <div class="pv-text-block">
+                            De voorzitter sluit het onderzoek ter zitting.
+                        </div>
+                    </div>
+
+                    <div class="pv-signature">
+                        <div class="pv-sig-line">De Griffier</div>
+                        <div class="pv-sig-line">De Voorzitter</div>
+                    </div>
+                    
+                    <div style="margin-top: 2rem; color: #666; font-size: 0.8rem; text-align: center;">
+                        <em>(Dit is een automatisch gegenereerd concept. Controle vereist.)</em>
+                    </div>
+                </div>`;
+            
+            container.innerHTML = contentHtml;
+        }
+
         function renderTranscript(segments) {
             transcriptContainer.innerHTML = '';
             

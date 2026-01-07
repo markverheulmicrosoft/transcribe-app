@@ -199,13 +199,14 @@ async def process_transcription(job_id: str, file_path: str, language: str, engi
         )
         
         if engine == "speech":
-            # Use Azure Speech Service with phrase list for better domain recognition
-            from app.phrase_list import get_phrase_list
+            # Use Azure Speech Service
+            # NOTE: phrase_list temporarily disabled - causes Azure Speech to hang
+            # from app.phrase_list import get_phrase_list
             transcriber = _get_speech_transcriber()
             result = await transcriber.transcribe_file(
                 file_path,
                 language,
-                phrase_list=get_phrase_list(),
+                # phrase_list=get_phrase_list(),
             )
         else:
             # Use Azure OpenAI (gpt-4o-transcribe-diarize)
