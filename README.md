@@ -4,89 +4,68 @@ Een Proof of Concept applicatie voor het transcriberen van zittingen met automat
 
 ## Kenmerken
 
-- 🎙️ **Spraak-naar-tekst transcriptie** met Azure OpenAI gpt-4o-transcribe-diarize
-- 👥 **Spreker-herkenning (diarization)** - onderscheidt automatisch verschillende sprekers
-- 📄 **Export naar Word en PDF** - professioneel opgemaakte documenten
-- �� **Volledig containerized** - eenvoudig te deployen
-- 🔒 **Veilig** - data blijft binnen Azure tenant (Azure Foundry)
+- **Spraak-naar-tekst transcriptie** met twee engines:
+  - **Azure AI Speech (Fast Transcription API)** - aanbevolen voor Nederlands
+  - Azure OpenAI gpt-4o-transcribe (beperkte taalondersteuning voor diarization)
+- **Spreker-herkenning (diarization)** - onderscheidt automatisch verschillende sprekers
+- **Concept Proces-Verbaal generatie** - automatische opmaak naar zakelijke weergave
+- **Juridische entiteiten herkenning** - linkt naar wetten.overheid.nl
+- **Export naar Word en PDF** - professioneel opgemaakte documenten
+- **Volledig containerized** - eenvoudig te deployen
+- **Veilig** - data blijft binnen Azure tenant via Private Endpoints
 
-## Technische Architectuur
+## Architectuur
 
-### Data Flow
+De applicatie is ontworpen voor deployment binnen de Azure-omgeving van de Raad van State:
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                           RVDS Azure Tenant                                   │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐        │
-│  │   Web Browser   │────▶│  Transcribe App │────▶│  Azure OpenAI   │        │
-│  │   (Upload UI)   │     │  (Container)    │     │  Service        │        │
-│  └─────────────────┘     └─────────────────┘     └─────────────────┘        │
-│         │                        │                       │                   │
-│         │                        │                       │                   │
-│         ▼                        ▼                       ▼                   │
-│  ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐        │
-│  │  Audio Upload   │     │  Transcriptie   │     │   AI Model      │        │
-│  │  (lokaal/temp)  │     │  Resultaat      │     │   gpt-4o-       │        │
-│  └─────────────────┘     │  (JSON)         │     │   transcribe-   │        │
-│                          └─────────────────┘     │   diarize       │        │
-│                                  │               └─────────────────┘        │
-│                                  ▼                                           │
-│                          ┌─────────────────┐                                 │
-│                          │  Export         │                                 │
-│                          │  (Word/PDF)     │                                 │
-│                          └─────────────────┘                                 │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
+![Architecture](./docs/Speech-to-teext.png)
 
-### Technische Componenten
+### Kernprincipes
 
-| Component | Technologie | Beschrijving |
-|-----------|-------------|--------------|
-| **Frontend** | HTML/CSS/JavaScript | Eenvoudige upload interface |
-| **Backend** | FastAPI (Python 3.12) | REST API voor transcriptie |
-| **Transcriptie** | Azure OpenAI | gpt-4o-transcribe-diarize model |
-| **AI Model** | gpt-4o-transcribe-diarize (2025-10-15) | Spraakherkenning met ingebouwde diarization |
-| **Export** | python-docx, ReportLab | Word en PDF generatie |
-| **Container** | Docker | Deployment |
+| Aspect | Implementatie |
+|--------|---------------|
+| **Data locatie** | Volledig binnen eigen Azure tenant |
+| **Netwerk isolatie** | Private Endpoints, geen publiek internet |
+| **Compliance** | AVG-compliant, EU Data Boundary |
+| **Beveiliging** | TLS 1.2+, VNet integratie |
 
-## gpt-4o-transcribe-diarize Model
+## Transcriptie Engines
 
-### Waarom gpt-4o-transcribe-diarize?
+### Azure AI Speech (Aanbevolen voor Nederlands)
 
-Dit model is de ideale keuze voor deze PoC omdat het:
+De **Fast Transcription API** is de aanbevolen keuze voor Nederlandse spraakherkenning met sprekerherkenning:
 
-| Feature | gpt-4o-transcribe-diarize | Azure OpenAI Whisper | Azure Speech Service |
-|---------|---------------------------|---------------------|---------------------|
-| Spreker-herkenning (diarization) | ✅ **Ingebouwd** | ❌ Niet beschikbaar | ✅ Ondersteund |
-| AI Model | GPT-4o gebaseerd | Whisper | Azure Base Model |
-| Max. bestandsgrootte | 25 MB | 25 MB | 1 GB (batch) |
-| Nederlands (nl-NL) | ✅ | ✅ | ✅ |
-| Data in Azure Tenant | ✅ Via Foundry | ✅ | ✅ |
-| Eenvoudige integratie | ✅ OpenAI SDK | ✅ OpenAI SDK | ⚠️ Speech SDK |
+| Feature | Specificatie |
+|---------|--------------|
+| **API** | Fast Transcription (v2025-10-15) |
+| **Diarization** | Ingebouwde sprekerherkenning, **ondersteunt Nederlands** |
+| **Max bestandsgrootte** | 1 GB (batch mode) |
+| **Talen** | Nederlands (nl-NL), Engels, Duits, Frans |
+| **Latency** | ~1-2 seconden per minuut audio |
 
-**Conclusie:** `gpt-4o-transcribe-diarize` combineert de kracht van GPT-4o met ingebouwde speaker diarization, perfect voor zittingen.
+### Azure OpenAI gpt-4o-transcribe (Alternatief)
 
-### Model Specificaties
+> ⚠️ **Let op**: Dit model ondersteunt **geen Nederlandse diarization**. Sprekerherkenning werkt alleen voor Engels. Voor Nederlandse transcripties met sprekerherkenning, gebruik Azure AI Speech.
 
-- **Model naam**: `gpt-4o-transcribe-diarize`
-- **Versie**: 2025-10-15
-- **Max bestandsgrootte**: 25 MB
-- **Native formaten**: MP3, MP4, MPEG, MPGA, M4A, WAV, WEBM
-- **Converteerbare formaten**: ASF, WMA, AVI, OGG, FLAC, AAC (via ffmpeg)
-- **Output**: Verbose JSON met segments en speaker labels
+Alternatieve engine voor transcriptie zonder sprekerherkenning:
 
-### Audio Conversie
+| Feature | Specificatie |
+|---------|--------------|
+| **Model** | gpt-4o-transcribe-diarize (2025-10-15) |
+| **Diarization** | Alleen Engels ondersteund |
+| **Max bestandsgrootte** | 25 MB |
+| **Deployment** | Global Standard (East US 2, Sweden Central) |
+| **Use case** | Engelse opnames, of Nederlandse transcriptie zonder sprekerherkenning |
 
-Bestanden in niet-native formaten (zoals ASF) worden automatisch geconverteerd naar WAV met ffmpeg:
+## Ondersteunde Audio Formaten
 
-```
-ASF/WMA bestand → ffmpeg conversie → WAV (16kHz, mono) → gpt-4o-transcribe-diarize
-```
+| Type | Formaten |
+|------|----------|
+| **Native** | WAV, MP3, OGG, OPUS, FLAC, WMA, AAC, WEBM, AMR |
+| **Container** | ASF (audio extractie via ffmpeg) |
+| **Conversie nodig** | AVI, FLV, WMV, M4A, MP4 |
 
-**Vereiste**: ffmpeg moet geïnstalleerd zijn voor conversie:
+**Vereiste**: ffmpeg moet geïnstalleerd zijn voor niet-native formaten:
 ```bash
 # Ubuntu/Debian
 sudo apt-get install ffmpeg
@@ -99,138 +78,180 @@ brew install ffmpeg
 
 ### Vereisten
 
-- Python 3.12+ (voor lokale development)
-- [UV](https://docs.astral.sh/uv/) - snelle Python package manager (aanbevolen)
-- ffmpeg (voor ASF/WMA conversie)
-- Docker en Docker Compose (voor container deployment)
-- Azure OpenAI Service met gpt-4o-transcribe-diarize deployment (via Azure Foundry)
+- Python 3.12+
+- [UV](https://docs.astral.sh/uv/) - snelle Python package manager
+- ffmpeg (voor audio conversie)
+- Docker (optioneel, voor container deployment)
+- Azure AI Speech resource (voor Speech engine)
+- Azure OpenAI resource (optioneel, voor OpenAI engine)
 
-### Stap 1: Deploy het gpt-4o-transcribe-diarize model in Azure
+### Stap 1: Azure Resources
 
-**⚠️ BELANGRIJK**: Je moet eerst het model deployen in Azure AI Foundry voordat je de applicatie kunt gebruiken.
+#### Azure AI Speech
 
-1. Ga naar [Azure AI Foundry Portal](https://ai.azure.com)
-2. Selecteer je Azure OpenAI resource of maak een nieuwe aan
-3. Ga naar **Deployments** → **Create new deployment**
-4. Selecteer model: **gpt-4o-transcribe-diarize** (versie 2025-10-15)
-5. Kies een deployment naam (bijv. `gpt-4o-transcribe-diarize`)
-6. Selecteer **Global Standard** als deployment type
-7. Klik op **Create**
+1. Maak een Azure AI Speech resource in Azure Portal
+2. Kies regio: **West Europe** (aanbevolen voor latency)
+3. Noteer de **Key** en **Region**
 
-**Beschikbare regio's voor gpt-4o-transcribe-diarize:**
-- East US 2 (Global Standard)
-- Sweden Central (Global Standard)
+#### Azure OpenAI (optioneel)
 
-### Stap 2: Clone en configureer
+1. Ga naar [Azure AI Foundry](https://ai.azure.com)
+2. Deploy het **gpt-4o-transcribe-diarize** model
+3. Beschikbare regio's: East US 2, Sweden Central
+
+### Stap 2: Configuratie
 
 ```bash
-# Clone repository
+# Clone en navigeer naar project
 cd transcribe-app
 
 # Kopieer environment template
 cp .env.example .env
-
-# Bewerk .env met je Azure credentials
-nano .env
 ```
 
-### Stap 3: Vul de .env in
+Vul de `.env` in:
 
 ```env
-# Azure OpenAI endpoint - vind dit in Azure Portal onder "Keys and Endpoint"
+# Azure AI Speech (aanbevolen)
+AZURE_SPEECH_KEY=your-speech-key
+AZURE_SPEECH_REGION=westeurope
+
+# Azure OpenAI (optioneel)
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-
-# API key - vind dit in Azure Portal onder "Keys and Endpoint"  
-AZURE_OPENAI_API_KEY=your-api-key-here
-
-# Deployment naam - dit is de naam die je koos in stap 1.5
+AZURE_OPENAI_API_KEY=your-api-key
 AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o-transcribe-diarize
+
+# Standaard engine: "speech" of "openai"
+TRANSCRIPTION_ENGINE=speech
+
+# Applicatie settings
+UPLOAD_DIR=./uploads
+MAX_FILE_SIZE_MB=25
 ```
 
-**Let op**: De deployment naam is NIET hetzelfde als de model naam. Het is de naam die je zelf hebt gekozen bij het aanmaken van de deployment.
-
-### Stap 4: Lokale Development (met UV)
+### Stap 3: Starten
 
 ```bash
-# Installeer UV (indien nog niet geïnstalleerd)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Installeer dependencies (incl. dev tools)
+# Installeer dependencies
 make dev
-# of: uv sync
 
-# Start de applicatie met hot reload
+# Start applicatie
 make run
-# of: uv run uvicorn app.main:app --reload
-
-# Run tests
-make test
-# of: uv run pytest -v
-
-# Lint en format code
-make lint
-make format
 ```
-
-### Stap 4b: Docker Deployment
-
-```bash
-# Build en start met Docker Compose
-make docker-run
-# of: docker-compose up -d
-
-# Stop containers
-make docker-stop
-# of: docker-compose down
-```
-
-### Stap 5: Open de applicatie
 
 Open http://localhost:8000 in je browser.
 
+### Docker Deployment
+
+```bash
+# Build en start
+make docker-run
+
+# Stop
+make docker-stop
+```
+
 ## Gebruik
 
-1. **Upload** een audiobestand (WAV, MP3, M4A, OGG, of WEBM) - max 25 MB
-2. **Selecteer** de taal van de opname
-3. **Start** de transcriptie
-4. **Bekijk** het resultaat met spreker-labels (automatisch gedetecteerd)
-5. **Exporteer** naar Word of PDF
+### Basis Workflow
 
-## Development
+1. **Upload** een audiobestand (max 25 MB voor OpenAI, 1 GB voor Speech)
+2. **Selecteer** de taal (Nederlands, Engels, Duits, Frans)
+3. **Kies** de transcriptie engine
+4. **Start** de transcriptie
+5. **Bekijk** het resultaat met spreker-labels
 
-### Project Structuur
+### Geavanceerde Features
+
+#### Concept Proces-Verbaal
+
+Genereer automatisch een zakelijke weergave van het verhandelde:
+- Klik op de tab "Concept Proces-Verbaal"
+- Het systeem groepeert uitspraken per spreker
+- Output geschikt als basis voor officieel PV
+
+#### Juridische Entiteiten
+
+Automatische herkenning en linking van juridische termen:
+- Algemene wet bestuursrecht (Awb) → [wetten.overheid.nl](https://wetten.overheid.nl/BWBR0005537)
+- Wet open overheid (Woo) → [wetten.overheid.nl](https://wetten.overheid.nl/BWBR0045754)
+- En andere veelvoorkomende wetten
+
+### Export
+
+- **Word** (.docx) - Professioneel opgemaakt document
+- **PDF** - Print-ready formaat
+
+## API Reference
+
+| Method | Endpoint | Beschrijving |
+|--------|----------|--------------|
+| `GET` | `/` | Web interface |
+| `GET` | `/api/health` | Health check |
+| `GET` | `/api/config` | Applicatie configuratie |
+| `POST` | `/api/transcribe` | Start transcriptie |
+| `GET` | `/api/transcription/{job_id}` | Status/resultaat ophalen |
+| `GET` | `/api/transcription/{job_id}/export/word` | Export naar Word |
+| `GET` | `/api/transcription/{job_id}/export/pdf` | Export naar PDF |
+| `DELETE` | `/api/transcription/{job_id}` | Verwijder transcriptie |
+
+### Transcriptie Request
+
+```bash
+curl -X POST http://localhost:8000/api/transcribe \
+  -F "file=@zitting.wav" \
+  -F "language=nl" \
+  -F "engine=speech"
+```
+
+### Response
+
+```json
+{
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "processing",
+  "message": "Transcription started (engine: speech)"
+}
+```
+
+## Project Structuur
 
 ```
 transcribe-app/
 ├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI applicatie
-│   ├── config.py            # Configuratie settings
-│   ├── services/
-│   │   ├── speech_service.py    # Azure OpenAI transcriptie
-│   │   └── export_service.py    # Word/PDF export
-│   └── static/
-│       └── index.html       # Frontend UI
+│   ├── main.py                 # FastAPI applicatie
+│   ├── config.py               # Configuratie settings
+│   └── services/
+│       ├── speech_service.py       # Azure OpenAI transcriptie
+│       ├── azure_speech_service.py # Azure AI Speech transcriptie
+│       ├── audio_converter.py      # ffmpeg audio conversie
+│       └── export_service.py       # Word/PDF export
+├── static/
+│   └── index.html              # Frontend UI
 ├── tests/
-│   └── test_api.py          # API tests
-├── pyproject.toml           # Project configuratie (UV/pip)
-├── Makefile                 # Development commands
+│   ├── test_api.py             # API tests
+│   └── test_audio_converter.py # Converter tests
+├── docs/
+│   └── architecture.png        # Architectuur diagram
+├── pyproject.toml              # Project configuratie
+├── Makefile                    # Development commands
 ├── Dockerfile
-├── docker-compose.yml
-└── README.md
+└── docker-compose.yml
 ```
 
-### Beschikbare Make Commands
+## Development
+
+### Make Commands
 
 | Command | Beschrijving |
 |---------|--------------|
-| `make dev` | Installeer alle dependencies met UV |
-| `make run` | Start app lokaal met hot reload |
+| `make dev` | Installeer dependencies met UV |
+| `make run` | Start app met hot reload |
 | `make test` | Run pytest tests |
-| `make test-cov` | Tests met coverage report |
+| `make test-cov` | Tests met coverage |
 | `make lint` | Run ruff linter |
-| `make format` | Format code met ruff |
-| `make typecheck` | Run mypy type checker |
+| `make format` | Format code |
+| `make typecheck` | Run mypy |
 | `make docker-build` | Build Docker image |
 | `make docker-run` | Start met Docker Compose |
 | `make clean` | Verwijder cache bestanden |
@@ -241,107 +262,80 @@ transcribe-app/
 # Run alle tests
 make test
 
-# Run tests met coverage
+# Met coverage
 make test-cov
 
-# Run specifieke test
-uv run pytest tests/test_api.py::TestHealthEndpoints -v
+# Specifieke test
+uv run pytest tests/test_api.py -v
 ```
 
 ## Veiligheid en Compliance
 
-### Data Flow en Verwerking
+### Data Flow
 
 ```
-Audio Upload → Container (lokaal) → Azure OpenAI → Resultaat → Export
-     │              │                    │              │
-     ▼              ▼                    ▼              ▼
-   TLS 1.2     Tijdelijke          Azure Tenant     Verwijdering
-              opslag               (via Foundry)    na verwerking
+Audio Upload → Container → Azure AI Speech → Resultaat → Export
+     │              │            │              │           │
+     ▼              ▼            ▼              ▼           ▼
+  TLS 1.2      Tijdelijk    Private EP     In-memory    Verwijdering
+              (verwijderd   (geen publiek  (geen DB)
+               na proces)    internet)
 ```
 
 ### Beveiligingsmaatregelen
 
 | Aspect | Maatregel |
 |--------|-----------|
-| **Transport** | TLS 1.2 voor alle verbindingen |
+| **Transport** | TLS 1.2+ voor alle verbindingen |
+| **Netwerk** | Private Endpoints binnen VNet |
 | **Data at rest** | Audio wordt na transcriptie verwijderd |
-| **Azure Tenant** | Data blijft binnen eigen tenant via Azure Foundry |
-| **Authenticatie** | API Key of Managed Identity (aanbevolen voor productie) |
-| **Netwerk** | Kan binnen VNet gedeployed worden |
+| **Azure Tenant** | Alle data blijft binnen eigen tenant |
+| **Authenticatie** | API Key of Managed Identity |
 
-### DPIA Overwegingen
+### AVG Compliance
 
 | Vraag | Antwoord |
 |-------|----------|
-| Waar wordt data verwerkt? | Binnen Azure tenant (via Azure Foundry) |
-| Blijft data in Azure tenant? | Ja, Azure OpenAI in eigen tenant |
-| Wordt data opgeslagen door Microsoft? | Nee, geen data opslag voor training |
-| Welke AI modellen worden gebruikt? | gpt-4o-transcribe-diarize (Microsoft/OpenAI) |
-| Is er sprake van training op data? | Nee, geen model training op klantdata |
+| Waar wordt data verwerkt? | Binnen eigen Azure tenant (EU) |
+| Blijft data in de EU? | Ja, EU Data Boundary |
+| Wordt data opgeslagen door Microsoft? | Nee |
+| Wordt data gebruikt voor training? | Nee |
 
-### AI-Verordening Compliance
+### AI-Verordening
 
-- **Transparantie**: Duidelijk dat AI wordt gebruikt voor transcriptie
-- **Menselijke controle**: Transcript kan worden gereviewd en gecorrigeerd
+- **Transparantie**: Duidelijk dat AI wordt gebruikt
+- **Menselijke controle**: Transcript kan worden gecorrigeerd
 - **Data minimalisatie**: Audio wordt verwijderd na verwerking
-- **Geen profiling**: Geen besluitvorming gebaseerd op AI-output
-- **Data soevereiniteit**: Verwerking binnen eigen Azure tenant
+- **Geen profiling**: Geen besluitvorming op basis van AI-output
 
-## API Endpoints
+## Roadmap
 
-| Method | Endpoint | Beschrijving |
-|--------|----------|--------------|
-| GET | `/` | Web interface |
-| GET | `/api/health` | Health check |
-| GET | `/api/config` | Applicatie configuratie |
-| POST | `/api/transcribe` | Start transcriptie |
-| GET | `/api/transcription/{job_id}` | Status/resultaat ophalen |
-| GET | `/api/transcription/{job_id}/export/word` | Export naar Word |
-| GET | `/api/transcription/{job_id}/export/pdf` | Export naar PDF |
-| DELETE | `/api/transcription/{job_id}` | Verwijder transcriptie |
+### Huidige Status (PoC)
 
-## Toekomstige Uitbreidingen
+- [x] Transcriptie met sprekerherkenning
+- [x] Twee engines (Azure Speech, OpenAI)
+- [x] Export naar Word/PDF
+- [x] Concept Proces-Verbaal generatie
+- [x] Juridische entiteiten herkenning
 
-### Stap 2: Nice-to-haves
+### Fase 2: Nice-to-haves
+
 - [ ] Koppeling met e-dossier/zaaksysteem
 - [ ] Ondersteuning voor vergaderingen
-- [ ] Spreker-identificatie (naam toekennen aan spreker)
-- [ ] Chunking voor bestanden > 25 MB
+- [ ] Spreker-identificatie (naam toekennen)
+- [ ] Chunking voor grote bestanden
 
-### Stap 3: Toekomst
-- [ ] Automatische generatie van Proces Verbaal
-- [ ] Samenvatting met Azure OpenAI GPT-4o
-- [ ] Integratie met MS Teams voor live transcriptie
+### Fase 3: Toekomst
 
-## Technisch Verwerkingsproces
-
-```
-1. UPLOAD
-   └─ Gebruiker uploadt audio via browser
-   └─ Bestand wordt tijdelijk opgeslagen in container
-   └─ Validatie van formaat en grootte (max 25 MB)
-
-2. TRANSCRIPTIE
-   └─ Verbinding naar Azure OpenAI Service (TLS 1.2)
-   └─ gpt-4o-transcribe-diarize API aanroep
-   └─ Audio wordt verzonden met verbose_json response format
-   └─ Model: gpt-4o-transcribe-diarize met ingebouwde diarization
-   └─ Data verwerking: binnen eigen Azure tenant
-
-3. RESULTAAT
-   └─ JSON response met segmenten en spreker-IDs
-   └─ Opslag in geheugen (geen persistente database in PoC)
-   └─ Origineel audiobestand wordt verwijderd
-
-4. EXPORT
-   └─ Generatie van Word/PDF lokaal in container
-   └─ Download naar gebruiker
-
-5. CLEANUP
-   └─ Automatische verwijdering na sessie/timeout
-```
+- [ ] Automatische PV generatie met GPT-4o
+- [ ] Samenvatting en analyse
+- [ ] MS Teams integratie
+- [ ] Event-driven architectuur (Blob trigger → auto-transcriptie)
 
 ## Licentie
 
 Intern gebruik - Raad van State
+
+---
+
+*Laatste update: Januari 2026*
