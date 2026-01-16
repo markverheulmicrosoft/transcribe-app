@@ -31,14 +31,14 @@ class Settings(BaseSettings):
     azure_speech_region: str = "westeurope"  # e.g., westeurope, eastus
     
     # Transcription engine: "openai" or "speech" (Azure Speech Service)
-    transcription_engine: str = "openai"
+    transcription_engine: str = "speech"
     
     # Application settings
     upload_dir: str = "./uploads"
-    max_file_size_mb: int = 25  # gpt-4o-transcribe-diarize limit is 25MB
+    max_file_size_mb: int = 300  # Azure Speech Fast Transcription limit is 300MB
     
     # Default language for transcription
-    default_language: str = "nl"  # Dutch as default for Raad van State
+    default_language: str = "nl"  # Dutch as default
 
 
 @lru_cache()

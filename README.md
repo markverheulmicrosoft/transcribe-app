@@ -1,6 +1,6 @@
-# Transcriptie PoC - Raad van State
+# Transcribe App PoC
 
-Een Proof of Concept applicatie voor het transcriberen van zittingen met automatische spreker-herkenning (diarization).
+Een Proof of Concept applicatie voor het transcriberen van audio met automatische spreker-herkenning (diarization).
 
 ## Kenmerken
 
@@ -14,21 +14,6 @@ Een Proof of Concept applicatie voor het transcriberen van zittingen met automat
 - **Volledig containerized** - eenvoudig te deployen
 - **Veilig** - data blijft binnen Azure tenant via Private Endpoints
 
-## Architectuur
-
-De applicatie is ontworpen voor deployment binnen de Azure-omgeving van de Raad van State:
-
-![Architecture](./docs/Speech-to-teext.png)
-
-### Kernprincipes
-
-| Aspect | Implementatie |
-|--------|---------------|
-| **Data locatie** | Volledig binnen eigen Azure tenant |
-| **Netwerk isolatie** | Private Endpoints, geen publiek internet |
-| **Compliance** | AVG-compliant, EU Data Boundary |
-| **Beveiliging** | TLS 1.2+, VNet integratie |
-
 ## Transcriptie Engines
 
 ### Azure AI Speech (Aanbevolen voor Nederlands)
@@ -39,7 +24,7 @@ De **Fast Transcription API** is de aanbevolen keuze voor Nederlandse spraakherk
 |---------|--------------|
 | **API** | Fast Transcription (v2025-10-15) |
 | **Diarization** | Ingebouwde sprekerherkenning, **ondersteunt Nederlands** |
-| **Max bestandsgrootte** | 1 GB (batch mode) |
+| **Max bestandsgrootte** | 300 MB (batch mode) |
 | **Talen** | Nederlands (nl-NL), Engels, Duits, Frans |
 | **Latency** | ~1-2 seconden per minuut audio |
 
@@ -81,7 +66,6 @@ brew install ffmpeg
 - Python 3.12+
 - [UV](https://docs.astral.sh/uv/) - snelle Python package manager
 - ffmpeg (voor audio conversie)
-- Docker (optioneel, voor container deployment)
 - Azure AI Speech resource (voor Speech engine)
 - Azure OpenAI resource (optioneel, voor OpenAI engine)
 
@@ -126,8 +110,10 @@ TRANSCRIPTION_ENGINE=speech
 
 # Applicatie settings
 UPLOAD_DIR=./uploads
-MAX_FILE_SIZE_MB=25
+MAX_FILE_SIZE_MB=300
 ```
+
+> Tip: gebruik `MAX_FILE_SIZE_MB=25` als je standaard Azure OpenAI gebruikt.
 
 ### Stap 3: Starten
 
@@ -141,21 +127,11 @@ make run
 
 Open http://localhost:8000 in je browser.
 
-### Docker Deployment
-
-```bash
-# Build en start
-make docker-run
-
-# Stop
-make docker-stop
-```
-
 ## Gebruik
 
 ### Basis Workflow
 
-1. **Upload** een audiobestand (max 25 MB voor OpenAI, 1 GB voor Speech)
+1. **Upload** een audiobestand (max 25 MB voor OpenAI, 300 MB voor Speech)
 2. **Selecteer** de taal (Nederlands, Engels, Duits, Frans)
 3. **Kies** de transcriptie engine
 4. **Start** de transcriptie
@@ -231,12 +207,9 @@ transcribe-app/
 ├── tests/
 │   ├── test_api.py             # API tests
 │   └── test_audio_converter.py # Converter tests
-├── docs/
-│   └── architecture.png        # Architectuur diagram
 ├── pyproject.toml              # Project configuratie
 ├── Makefile                    # Development commands
-├── Dockerfile
-└── docker-compose.yml
+  └── LICENSE
 ```
 
 ## Development
@@ -252,8 +225,6 @@ transcribe-app/
 | `make lint` | Run ruff linter |
 | `make format` | Format code |
 | `make typecheck` | Run mypy |
-| `make docker-build` | Build Docker image |
-| `make docker-run` | Start met Docker Compose |
 | `make clean` | Verwijder cache bestanden |
 
 ### Testing
@@ -271,42 +242,12 @@ uv run pytest tests/test_api.py -v
 
 ## Veiligheid en Compliance
 
-### Data Flow
+### Richtlijnen
 
-```
-Audio Upload → Container → Azure AI Speech → Resultaat → Export
-     │              │            │              │           │
-     ▼              ▼            ▼              ▼           ▼
-  TLS 1.2      Tijdelijk    Private EP     In-memory    Verwijdering
-              (verwijderd   (geen publiek  (geen DB)
-               na proces)    internet)
-```
-
-### Beveiligingsmaatregelen
-
-| Aspect | Maatregel |
-|--------|-----------|
-| **Transport** | TLS 1.2+ voor alle verbindingen |
-| **Netwerk** | Private Endpoints binnen VNet |
-| **Data at rest** | Audio wordt na transcriptie verwijderd |
-| **Azure Tenant** | Alle data blijft binnen eigen tenant |
-| **Authenticatie** | API Key of Managed Identity |
-
-### AVG Compliance
-
-| Vraag | Antwoord |
-|-------|----------|
-| Waar wordt data verwerkt? | Binnen eigen Azure tenant (EU) |
-| Blijft data in de EU? | Ja, EU Data Boundary |
-| Wordt data opgeslagen door Microsoft? | Nee |
-| Wordt data gebruikt voor training? | Nee |
-
-### AI-Verordening
-
-- **Transparantie**: Duidelijk dat AI wordt gebruikt
-- **Menselijke controle**: Transcript kan worden gecorrigeerd
-- **Data minimalisatie**: Audio wordt verwijderd na verwerking
-- **Geen profiling**: Geen besluitvorming op basis van AI-output
+- **Data minimalisatie**: Audio wordt standaard verwijderd na verwerking.
+- **Transport**: Gebruik TLS 1.2+ voor alle verbindingen.
+- **Netwerk**: Configureer Private Endpoints/VNet indien vereist door beleid.
+- **Compliance**: Beoordeel AVG/AI-verordening op basis van jouw deployment en data-classificatie.
 
 ## Roadmap
 
@@ -334,7 +275,7 @@ Audio Upload → Container → Azure AI Speech → Resultaat → Export
 
 ## Licentie
 
-Intern gebruik - Raad van State
+MIT License. Zie [LICENSE](LICENSE).
 
 ---
 

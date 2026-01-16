@@ -46,8 +46,8 @@ logger = logging.getLogger("app.main")
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Transcriptie PoC",
-    description="Proof of Concept voor transcriptie van zittingen met spreker-herkenning",
+    title="Transcribe App",
+    description="Proof of Concept for audio transcription with speaker diarization",
     version="0.1.0"
 )
 
@@ -83,9 +83,9 @@ async def root():
         return html_path.read_text(encoding="utf-8")
     return """
     <html>
-        <head><title>Transcriptie PoC</title></head>
+        <head><title>Transcribe App</title></head>
         <body>
-            <h1>Transcriptie PoC</h1>
+            <h1>Transcribe App</h1>
             <p>Static files not found. Please ensure the static folder exists.</p>
         </body>
     </html>
@@ -190,7 +190,7 @@ async def transcribe_audio(
     }
 
 
-async def process_transcription(job_id: str, file_path: str, language: str, engine: str = "openai"):
+async def process_transcription(job_id: str, file_path: str, language: str, engine: str = "speech"):
     """Background task to process transcription."""
     try:
         logger.info(

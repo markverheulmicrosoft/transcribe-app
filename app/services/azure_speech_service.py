@@ -188,7 +188,7 @@ class AzureSpeechTranscriber:
             language: Language code (e.g., 'nl' for Dutch, 'en' for English)
             on_progress: Optional callback for progress updates
             phrase_list: Optional list of words/phrases to boost recognition
-                         (e.g., ["Raad van State", "appellant", "verweerder"])
+                         (e.g., ["rechtbank", "appellant", "verweerder"])
 
         Returns:
             SpeechTranscriptionResult with segments and speaker information

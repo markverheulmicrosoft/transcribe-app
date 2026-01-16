@@ -1,12 +1,12 @@
 [project]
 name = "transcribe-app"
 version = "0.1.0"
-description = "PoC voor transcriptie van zittingen met spreker-herkenning"
+description = "PoC for audio transcription with speaker diarization"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Proprietary" }
+license = { text = "MIT" }
 authors = [
-    { name = "Raad van State" }
+    { name = "Transcribe App Contributors" }
 ]
 
 dependencies = [
@@ -14,12 +14,14 @@ dependencies = [
     "uvicorn[standard]>=0.34.0",
     "python-multipart>=0.0.19",
     "openai>=1.58.1",
+    "azure-cognitiveservices-speech>=1.42.0",
     "httpx>=0.28.1",
     "aiofiles>=24.1.0",
     "python-docx>=1.1.2",
     "reportlab>=4.2.5",
     "python-dotenv>=1.0.1",
     "pydantic-settings>=2.7.1",
+    "pydub>=0.25.1",
 ]
 
 [project.optional-dependencies]

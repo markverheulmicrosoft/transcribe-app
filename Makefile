@@ -1,7 +1,7 @@
 # Makefile for Transcribe App
 # Using UV for fast Python dependency management
 
-.PHONY: help install dev run test lint format clean docker-build docker-run
+.PHONY: help install dev run test lint format clean
 
 # Default target
 help:
@@ -18,11 +18,6 @@ help:
 	@echo "  make lint        - Run ruff linter"
 	@echo "  make format      - Format code with ruff"
 	@echo "  make typecheck   - Run mypy type checker"
-	@echo ""
-	@echo "Docker:"
-	@echo "  make docker-build  - Build Docker image"
-	@echo "  make docker-run    - Run with Docker Compose"
-	@echo "  make docker-stop   - Stop Docker Compose"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean       - Remove cache and build files"
@@ -59,18 +54,6 @@ format:
 # Type checking
 typecheck:
 	uv run mypy app
-
-# Build Docker image
-docker-build:
-	docker build -t transcribe-app:latest .
-
-# Run with Docker Compose
-docker-run:
-	docker-compose up -d
-
-# Stop Docker Compose
-docker-stop:
-	docker-compose down
 
 # Clean up cache files
 clean:

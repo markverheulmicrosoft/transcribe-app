@@ -36,8 +36,8 @@ class TestHealthEndpoints:
         assert "supported_languages" in data
         # Check default language
         assert data["default_language"] == "nl"
-        # Check max file size for gpt-4o-transcribe-diarize
-        assert data["max_file_size_mb"] == 25
+        # Check max file size for Azure Speech Fast Transcription
+        assert data["max_file_size_mb"] == 300
 
 
 class TestTranscriptionEndpoints:
@@ -88,4 +88,4 @@ class TestStaticFiles:
         response = client.get("/")
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
-        assert "Transcriptie PoC" in response.text
+        assert "Transcribe App" in response.text

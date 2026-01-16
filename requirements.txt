@@ -1,25 +1,2 @@
-# FastAPI and web framework
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-python-multipart==0.0.19
-
-# Azure OpenAI SDK
-openai==1.58.1
-
-# Azure Speech Service SDK (for diarization with better Dutch support)
-azure-cognitiveservices-speech==1.42.0
-
-# HTTP requests for Azure REST API
-httpx==0.28.1
-aiofiles==24.1.0
-
-# Document generation
-python-docx==1.1.2
-reportlab==4.2.5
-
-# Environment and configuration
-python-dotenv==1.0.1
-pydantic-settings==2.7.1
-
-# Audio processing
-pydub==0.25.1
+# This project uses uv + pyproject.toml for dependency management.
+# requirements.txt is intentionally deprecated.
