@@ -57,6 +57,10 @@ sudo apt-get install ffmpeg
 
 # macOS
 brew install ffmpeg
+
+# Windows (PowerShell als Administrator)
+winget install ffmpeg
+# of via Chocolatey: choco install ffmpeg
 ```
 
 ## Installatie
@@ -226,6 +230,35 @@ transcribe-app/
 | `make format` | Format code |
 | `make typecheck` | Run mypy |
 | `make clean` | Verwijder cache bestanden |
+
+### Windows / PowerShell
+
+Voor Windows gebruikers is er een PowerShell script beschikbaar met dezelfde functionaliteit:
+
+```powershell
+# Bekijk beschikbare commands
+.\Make.ps1 help
+
+# Installeer dependencies
+.\Make.ps1 dev
+
+# Start applicatie
+.\Make.ps1 run
+
+# Run tests
+.\Make.ps1 test
+```
+
+| Command | Beschrijving |
+|---------|--------------|
+| `.\Make.ps1 dev` | Installeer dependencies met UV |
+| `.\Make.ps1 run` | Start app met hot reload |
+| `.\Make.ps1 test` | Run pytest tests |
+| `.\Make.ps1 test-cov` | Tests met coverage |
+| `.\Make.ps1 lint` | Run ruff linter |
+| `.\Make.ps1 format` | Format code |
+| `.\Make.ps1 typecheck` | Run mypy |
+| `.\Make.ps1 clean` | Verwijder cache bestanden |
 
 ### Testing
 
